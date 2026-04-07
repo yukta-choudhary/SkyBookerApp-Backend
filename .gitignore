@@ -1,0 +1,12 @@
+target/
+.mvn/
+.idea/
+.project
+.classpath
+.settings/
+.springBeans
+.sts4-cache/
+*.log
+.env
+application-local.yml
+/.metadata/
