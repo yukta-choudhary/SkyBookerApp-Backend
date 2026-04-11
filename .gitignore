@@ -11,5 +11,6 @@ mvnw.cmd
 *.log
 .env
 auth-service/src/main/resources/application.yml
+auth-service/src/main/resources/application.yml
 
 /.metadata/

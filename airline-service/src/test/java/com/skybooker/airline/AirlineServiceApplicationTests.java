@@ -1,4 +1,4 @@
-package com.skybooker.airline_service;
+package com.skybooker.airline;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

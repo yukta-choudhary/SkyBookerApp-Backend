@@ -1,13 +1,11 @@
-package com.skybooker.airline_service;
+package com.skybooker.airline;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 public class AirlineServiceApplication {
-
-	public static void main(String[] args) {
-		SpringApplication.run(AirlineServiceApplication.class, args);
-	}
-
+    public static void main(String[] args) {
+        SpringApplication.run(AirlineServiceApplication.class, args);
+    }
 }
