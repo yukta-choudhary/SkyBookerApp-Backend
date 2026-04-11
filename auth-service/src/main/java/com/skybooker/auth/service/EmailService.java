@@ -1,5 +1,5 @@
 package com.skybooker.auth.service;
 
 public interface EmailService {
-    void sendPasswordResetEmail(String toEmail, String resetToken);
+    void sendPasswordResetEmail(String to, String fullName, String resetLink);
 }

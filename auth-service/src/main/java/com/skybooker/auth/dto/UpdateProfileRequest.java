@@ -1,35 +1,19 @@
 package com.skybooker.auth.dto;
 
-import com.skybooker.auth.enums.Role;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class RegisterRequest {
-
+public class UpdateProfileRequest {
     @NotBlank
     @Size(max = 120)
     private String fullName;
 
     @NotBlank
-    @Email
-    @Size(max = 120)
-    private String email;
-
-    @NotBlank
-    @Size(min = 8, max = 100)
-    private String password;
-
-    @NotBlank
     @Pattern(regexp = "^[0-9]{10,15}$", message = "Phone must contain 10 to 15 digits")
     private String phone;
-
-    @NotNull
-    private Role role;
 
     @Size(max = 30)
     private String passportNumber;

@@ -8,5 +8,6 @@ target/
 .sts4-cache/
 *.log
 .env
-application-local.yml
+auth-service/src/main/resources/application.yml
+
 /.metadata/

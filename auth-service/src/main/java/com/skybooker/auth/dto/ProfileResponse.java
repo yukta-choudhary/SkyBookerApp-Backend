@@ -5,21 +5,19 @@ import com.skybooker.auth.enums.Role;
 import lombok.Builder;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 @Data
 @Builder
-public class AuthResponse {
+public class ProfileResponse {
     private String userId;
     private String fullName;
     private String email;
+    private String phone;
     private Role role;
     private AuthProvider provider;
-
-    private String accessToken;
-    private String refreshToken;
-    private String tokenType;
-    private long expiresIn;
-
-    
-    private String message;
-    private String redirectUrl;
+    private Boolean active;
+    private String passportNumber;
+    private String nationality;
+    private LocalDateTime createdAt;
 }

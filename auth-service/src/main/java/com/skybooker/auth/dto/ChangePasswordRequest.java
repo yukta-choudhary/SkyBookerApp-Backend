@@ -5,9 +5,9 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
-public class ResetPasswordRequest {
+public class ChangePasswordRequest {
     @NotBlank
-    private String token;
+    private String oldPassword;
 
     @NotBlank
     @Size(min = 8, max = 100)

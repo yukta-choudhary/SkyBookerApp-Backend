@@ -1,10 +1,10 @@
 package com.skybooker.auth.dto;
 
 import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.Data;
 
-@Getter
+@Data
 @AllArgsConstructor
-public class ApiResponse {
+public class MessageResponse {
     private String message;
 }

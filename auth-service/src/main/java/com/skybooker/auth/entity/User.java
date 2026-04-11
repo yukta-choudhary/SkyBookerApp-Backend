@@ -9,53 +9,70 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "users")
+@Table(name = "users", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_user_email", columnNames = "email"),
+        @UniqueConstraint(name = "uk_user_phone", columnNames = "phone"),
+        @UniqueConstraint(name = "uk_user_passport", columnNames = "passport_number")
+})
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID userId;
+    @Column(name = "user_id", nullable = false, updatable = false, length = 36)
+    private String userId;
 
-    @Column(nullable = false)
+    @Column(name = "full_name", nullable = false, length = 120)
     private String fullName;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false, length = 120)
     private String email;
 
-    @Column(nullable = false)
+    @Column(name = "password_hash")
     private String passwordHash;
 
-    @Column(unique = true)
+    @Column(length = 20)
     private String phone;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30)
     private Role role;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 20)
     private AuthProvider provider;
 
-    @Column(nullable = false)
-    private Boolean isActive;
+    @Column(name = "is_active", nullable = false)
+    private Boolean active;
 
+    @Column(name = "passport_number", length = 30)
     private String passportNumber;
 
+    @Column(length = 80)
     private String nationality;
 
-    @Column(nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
-    public void prePersist() {
-        this.createdAt = LocalDateTime.now();
-        if (this.isActive == null) {
-            this.isActive = true;
+    public void onCreate() {
+        if (this.userId == null) {
+            this.userId = UUID.randomUUID().toString();
+        }
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
+        }
+        if (this.active == null) {
+            this.active = true;
+        }
+        if (this.provider == null) {
+            this.provider = AuthProvider.LOCAL;
+        }
+        if (this.role == null) {
+            this.role = Role.PASSENGER;
         }
     }
 }
