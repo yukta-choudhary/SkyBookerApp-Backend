@@ -59,3 +59,54 @@ The **Auth Service** is responsible for managing user identity, authentication, 
 
 
 ---
+
+## Airline Service – SkyBooker
+
+The **Airline Service** is responsible for managing airline and airport master data in the SkyBooker Airline Ticket Booking System. It provides foundational data required for flight creation, search, and booking operations across the platform.
+
+### 🚀 Features Implemented
+
+- **Airline Management**
+  - Create, update, activate, and deactivate airline profiles
+  - Unique identification using IATA and ICAO codes
+  - Store airline details such as name, logo, country, and contact information
+
+- **Airport Management**
+  - Create and manage airport profiles
+  - Supports IATA and ICAO codes
+  - Stores city, country, GPS coordinates, and timezone for accurate scheduling
+
+- **Airport Search & Autocomplete**
+  - Search airports by keyword (name, city, or IATA code)
+  - Enables autocomplete functionality for flight search UI
+
+- **Airline Retrieval**
+  - Fetch airline details by ID or IATA code
+  - List all airlines or only active airlines
+
+- **Airport Retrieval**
+  - Fetch airport details by ID or IATA code
+  - Filter airports by city or country
+
+- **Role-Based Access Control**
+  - Supports roles:
+    - PASSENGER
+    - AIRLINE_STAFF
+    - ADMIN
+  - Access Rules:
+    - ADMIN → Full access (create/update/delete)
+    - AIRLINE_STAFF → Read-only access
+    - PASSENGER / GUEST → Public read access for search
+
+- **JWT-Based Authentication**
+  - Stateless authentication using JSON Web Tokens
+  - Token validation for every protected API request
+  - Extracts user role for authorization
+
+- **Database Integration**
+  - MySQL-based persistence
+  - Tables:
+    - airlines
+    - airports
+
+---
