@@ -16,7 +16,11 @@ spring:
         - id: airline-service
           uri: lb://airline-service
           predicates:
-            - Path=/api/v1/airlines/**,/api/v1/airports/**
+            - Path=/api/v1/airlines/**
+        - id: airport-service
+          uri: lb://airline-service
+          predicates:
+            - Path=/api/v1/airports/**
 
 eureka:
   client:
