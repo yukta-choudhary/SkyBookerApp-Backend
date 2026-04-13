@@ -1,14 +1,23 @@
+server:
+  port: 8081
+
 spring:
   config:
     activate:
       on-profile: prod
+
+  application:
+    name: auth-service
+
   datasource:
     url: ${SPRING_DATASOURCE_URL}
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
+
   mail:
     username: ${MAIL_USERNAME}
     password: ${MAIL_PASSWORD}
+
   security:
     oauth2:
       client:
@@ -23,3 +32,13 @@ app:
   frontend-base-url: ${APP_FRONTEND_BASE_URL}
   mail:
     from: ${APP_MAIL_FROM}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
