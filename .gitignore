@@ -1,5 +1,6 @@
 target/
 .mvn/
+bin/
 mvnw
 mvnw.cmd
 .idea/
@@ -12,5 +13,6 @@ mvnw.cmd
 .env
 auth-service/src/main/resources/application.yml
 airline-service/src/main/resources/application.yml
+flight-service/src/main/resources/application.yml
 
 /.metadata/
