@@ -3,7 +3,7 @@
 ## About - 
 SkyBooker is a full-stack Airline Ticket Booking System inspired by MakeMyTrip and GoIbibo. It connects passengers with airlines, enabling them to search for one-way and round-trip flights, compare fare classes, select seats on an interactive seat map, enter passenger details, add ancillary services (meal preferences, extra baggage), and complete the booking with secure online payment — all from a unified platform.
 
-## Auth Service – SkyBooker
+## Auth Service 
 
 The **Auth Service** is responsible for managing user identity, authentication, and authorization in the SkyBooker Airline Ticket Booking System.
 
@@ -60,7 +60,7 @@ The **Auth Service** is responsible for managing user identity, authentication, 
 
 ---
 
-## Airline Service – SkyBooker
+## Airline Service 
 
 The **Airline Service** is responsible for managing airline and airport master data in the SkyBooker Airline Ticket Booking System. It provides foundational data required for flight creation, search, and booking operations across the platform.
 
@@ -108,5 +108,53 @@ The **Airline Service** is responsible for managing airline and airport master d
   - Tables:
     - airlines
     - airports
+
+---
+
+## Flight Service 
+
+The **Flight Service** manages flight schedules and inventory in the SkyBooker Airline Ticket Booking System. It acts as the core service for flight search and availability.
+
+### 🚀 Features Implemented
+
+- **Flight Management**
+  - Create new flight schedules
+  - Store flight number, airline reference, aircraft type
+  - Maintain departure and arrival times
+
+- **Flight Search**
+  - Search flights by:
+    - Origin airport
+    - Destination airport
+    - Date
+  - Supports one-way search functionality
+
+- **Flight Status Management**
+  - Update real-time flight status:
+    - ON_TIME
+    - DELAYED
+    - CANCELLED
+    - DEPARTED
+    - ARRIVED
+
+- **Seat Inventory Tracking**
+  - Maintain total seats and available seats
+  - Automatically initializes available seats on flight creation
+
+- **Airline-wise Flight Retrieval**
+  - Fetch all flights for a specific airline
+
+- **Flight Update & Deletion**
+  - Update flight details such as timing, aircraft type, and pricing
+  - Delete flights when required
+
+- **Database Integration**
+  - MySQL-based persistence
+  - Tables:
+    - flights
+
+- **JWT-Based Authentication**
+  - Validates JWT tokens issued by Auth Service
+  - Ensures secure access to protected endpoints
 
 ---
