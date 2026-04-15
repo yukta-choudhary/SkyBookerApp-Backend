@@ -7,20 +7,54 @@ spring:
 
   cloud:
     gateway:
-      routes:
-        - id: auth-service
-          uri: lb://auth-service
-          predicates:
-            - Path=/api/v1/auth/**
+      server:
+        webmvc:
+          routes:
+            - id: auth-service
+              uri: lb://auth-service
+              predicates:
+                - Path=/api/v1/auth/**
 
-        - id: airline-service
-          uri: lb://airline-service
-          predicates:
-            - Path=/api/v1/airlines/**
-        - id: airport-service
-          uri: lb://airline-service
-          predicates:
-            - Path=/api/v1/airports/**
+            - id: airline-service
+              uri: lb://airline-service
+              predicates:
+                - Path=/api/v1/airlines/**
+
+            - id: airport-service
+              uri: lb://airport-service
+              predicates:
+                - Path=/api/v1/airports/**
+
+            - id: aircraft-service
+              uri: lb://aircraft-service
+              predicates:
+                - Path=/api/v1/aircrafts/**
+
+            - id: flight-service
+              uri: lb://flight-service
+              predicates:
+                - Path=/api/v1/flights/**
+
+            - id: passenger-service
+              uri: lb://passenger-service
+              predicates:
+                - Path=/api/v1/passengers/**
+
+            - id: booking-service
+              uri: lb://booking-service
+              predicates:
+                - Path=/api/v1/bookings/**
+
+            - id: payment-service
+              uri: lb://payment-service
+              predicates:
+                - Path=/api/v1/payments/**
+
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/v1/notifications/**
+
 
 eureka:
   client:
@@ -30,10 +64,10 @@ eureka:
     fetch-registry: true
   instance:
     prefer-ip-address: true
-    instance-id: ${spring.application.name}:${server.port}
+    instance-id: ${spring.application.name}:${server.port}	
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: "*"
