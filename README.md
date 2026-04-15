@@ -7,7 +7,7 @@ SkyBooker is a full-stack Airline Ticket Booking System inspired by MakeMyTrip a
 
 The **Auth Service** is responsible for managing user identity, authentication, and authorization in the SkyBooker Airline Ticket Booking System.
 
-### 🚀 Features Implemented
+###  Features Implemented
 
 - **User Registration**
   - Register users with email and password
@@ -64,7 +64,7 @@ The **Auth Service** is responsible for managing user identity, authentication, 
 
 The **Airline Service** is responsible for managing airline and airport master data in the SkyBooker Airline Ticket Booking System. It provides foundational data required for flight creation, search, and booking operations across the platform.
 
-### 🚀 Features Implemented
+###  Features Implemented
 
 - **Airline Management**
   - Create, update, activate, and deactivate airline profiles
@@ -108,5 +108,161 @@ The **Airline Service** is responsible for managing airline and airport master d
   - Tables:
     - airlines
     - airports
+
+---
+---
+
+## Flight Service – SkyBooker
+
+The **Flight Service** manages flight schedules and inventory in the SkyBooker Airline Ticket Booking System. It acts as the core service for flight search and availability.
+
+###  Features Implemented
+
+- **Flight Management**
+  - Create new flight schedules
+  - Store flight number, airline reference, aircraft type
+  - Maintain departure and arrival times
+
+- **Flight Search**
+  - Search flights by:
+    - Origin airport
+    - Destination airport
+    - Date
+  - Supports one-way search functionality
+
+- **Flight Status Management**
+  - Update real-time flight status:
+    - ON_TIME
+    - DELAYED
+    - CANCELLED
+    - DEPARTED
+    - ARRIVED
+
+- **Seat Inventory Tracking**
+  - Maintain total seats and available seats
+  - Automatically initializes available seats on flight creation
+
+- **Airline-wise Flight Retrieval**
+  - Fetch all flights for a specific airline
+
+- **Flight Update & Deletion**
+  - Update flight details such as timing, aircraft type, and pricing
+  - Delete flights when required
+
+- **Database Integration**
+  - MySQL-based persistence
+  - Tables:
+    - flights
+
+- **JWT-Based Authentication**
+  - Validates JWT tokens issued by Auth Service
+  - Ensures secure access to protected endpoints
+
+---
+
+## Booking Service – SkyBooker
+
+The **Booking Service** is the central orchestration service responsible for managing the complete booking lifecycle in the SkyBooker system.
+
+###  Features Implemented
+
+- **Booking Creation**
+  - Create booking linked to user and flight
+  - Automatically generates unique **PNR code**
+  - Initializes booking with `PENDING` status
+
+- **PNR-Based Retrieval**
+  - Fetch booking using PNR code
+  - Enables quick lookup without full authentication flow
+
+- **Booking Lifecycle Management**
+  - Status transitions:
+    - PENDING
+    - CONFIRMED
+    - CANCELLED
+    - COMPLETED
+    - NO_SHOW
+
+- **User Booking Management**
+  - Retrieve all bookings for a user
+  - Retrieve bookings by flight
+
+- **Booking Cancellation**
+  - Cancel bookings
+  - Update status to `CANCELLED`
+
+- **Fare Storage**
+  - Stores:
+    - Base fare
+    - Taxes
+    - Total fare
+  - Supports future extension for dynamic fare calculation
+
+- **Trip Type Support**
+  - ONE_WAY
+  - ROUND_TRIP
+
+- **Database Integration**
+  - MySQL-based persistence
+  - Tables:
+    - bookings
+
+- **JWT-Based Authentication**
+  - Validates JWT tokens from Auth Service
+  - Ensures only authorized users can manage bookings
+
+---
+
+## Passenger Service – SkyBooker
+
+The **Passenger Service** manages detailed passenger information associated with each booking in the SkyBooker system.
+
+###  Features Implemented
+
+- **Passenger Management**
+  - Add passenger details per booking
+  - Store:
+    - Name, DOB, gender
+    - Passport details
+    - Nationality
+
+- **Ticket Number Generation**
+  - Auto-generates unique ticket number for each passenger
+
+- **Booking Linkage**
+  - Each passenger is linked to a booking
+  - Supports multiple passengers per booking
+
+- **Seat Assignment**
+  - Assign seat ID and seat number to passenger
+  - Supports future integration with Seat Service
+
+- **Passenger Retrieval**
+  - Get passenger by ID
+  - Get all passengers for a booking
+
+- **Passenger Update**
+  - Update passenger details (name, passport, etc.)
+
+- **Passenger Deletion**
+  - Remove passenger records if required
+
+- **Passenger Count**
+  - Count total passengers per booking
+
+- **Passenger Type Support**
+  - ADULT
+  - CHILD
+  - INFANT
+
+- **Database Integration**
+  - MySQL-based persistence
+  - Tables:
+    - passenger_info
+
+- **JWT-Based Authentication**
+  - Validates JWT tokens for secure access
+  - Ensures role-based operations
+
 
 ---
