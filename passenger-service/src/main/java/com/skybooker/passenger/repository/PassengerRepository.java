@@ -11,6 +11,8 @@ public interface PassengerRepository extends JpaRepository<PassengerInfo, UUID> 
 
     List<PassengerInfo> findByBookingId(UUID bookingId);
 
+    List<PassengerInfo> findByBookingIdAndUserId(UUID bookingId, UUID userId);
+
     Optional<PassengerInfo> findByPassportNumber(String passportNumber);
 
     Optional<PassengerInfo> findByTicketNumber(String ticketNumber);

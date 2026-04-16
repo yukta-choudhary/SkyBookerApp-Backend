@@ -1,10 +1,12 @@
 package com.skybooker.booking.service.impl;
 
+import com.skybooker.booking.config.SecurityUtils;
 import com.skybooker.booking.entity.Booking;
 import com.skybooker.booking.enums.BookingStatus;
 import com.skybooker.booking.repository.BookingRepository;
 import com.skybooker.booking.service.BookingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -19,7 +21,8 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public Booking createBooking(Booking booking) {
-
+        booking.setBookingId(null);
+        booking.setUserId(SecurityUtils.getCurrentUserId());
         booking.setBookedAt(LocalDateTime.now());
         booking.setStatus(BookingStatus.PENDING);
         booking.setPnrCode(generatePnr());
@@ -29,8 +32,14 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public Booking getBookingById(UUID bookingId) {
-        return bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Booking not found"));
+
+        if (SecurityUtils.hasRole("PASSENGER") && !booking.getUserId().equals(SecurityUtils.getCurrentUserId())) {
+            throw new AccessDeniedException("You can only view your own bookings");
+        }
+
+        return booking;
     }
 
     @Override
@@ -41,6 +50,9 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public List<Booking> getBookingsByUser(UUID userId) {
+        if (SecurityUtils.hasRole("PASSENGER") && !userId.equals(SecurityUtils.getCurrentUserId())) {
+            throw new AccessDeniedException("You can only view your own bookings");
+        }
         return bookingRepository.findByUserId(userId);
     }
 
@@ -51,14 +63,18 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public Booking cancelBooking(UUID bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Booking not found"));
 
-        Booking booking = getBookingById(bookingId);
+        if (SecurityUtils.hasRole("PASSENGER") && !booking.getUserId().equals(SecurityUtils.getCurrentUserId())) {
+            throw new AccessDeniedException("You can only cancel your own booking");
+        }
+
         booking.setStatus(BookingStatus.CANCELLED);
-
         return bookingRepository.save(booking);
     }
 
     private String generatePnr() {
-        return UUID.randomUUID().toString().substring(0, 6).toUpperCase();
+        return UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
     }
 }

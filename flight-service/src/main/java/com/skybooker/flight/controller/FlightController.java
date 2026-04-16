@@ -3,6 +3,7 @@ package com.skybooker.flight.controller;
 import com.skybooker.flight.entity.Flight;
 import com.skybooker.flight.service.FlightService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -17,6 +18,7 @@ public class FlightController {
     private final FlightService flightService;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('AIRLINE_STAFF','ADMIN')")
     public Flight addFlight(@RequestBody Flight flight) {
         return flightService.addFlight(flight);
     }
@@ -37,24 +39,23 @@ public class FlightController {
             @RequestParam String destination,
             @RequestParam String date
     ) {
-        return flightService.searchFlights(
-                origin,
-                destination,
-                LocalDate.parse(date)
-        );
+        return flightService.searchFlights(origin, destination, LocalDate.parse(date));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('AIRLINE_STAFF','ADMIN')")
     public Flight updateFlight(@PathVariable UUID id, @RequestBody Flight flight) {
         return flightService.updateFlight(id, flight);
     }
 
     @PutMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('AIRLINE_STAFF','ADMIN')")
     public Flight updateStatus(@PathVariable UUID id, @RequestParam String status) {
         return flightService.updateStatus(id, status);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('AIRLINE_STAFF','ADMIN')")
     public void deleteFlight(@PathVariable UUID id) {
         flightService.deleteFlight(id);
     }

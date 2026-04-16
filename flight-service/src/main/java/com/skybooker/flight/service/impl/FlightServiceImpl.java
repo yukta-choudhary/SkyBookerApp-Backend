@@ -21,7 +21,9 @@ public class FlightServiceImpl implements FlightService {
     @Override
     public Flight addFlight(Flight flight) {
         flight.setAvailableSeats(flight.getTotalSeats());
-        flight.setStatus(FlightStatus.ON_TIME);
+        if (flight.getStatus() == null) {
+            flight.setStatus(FlightStatus.ON_TIME);
+        }
         return flightRepository.save(flight);
     }
 
@@ -38,24 +40,32 @@ public class FlightServiceImpl implements FlightService {
 
     @Override
     public List<Flight> searchFlights(String origin, String destination, LocalDate date) {
-
         LocalDateTime start = date.atStartOfDay();
-        LocalDateTime end = date.atTime(23, 59);
+        LocalDateTime end = date.atTime(23, 59, 59);
 
         return flightRepository
                 .findByOriginAirportCodeAndDestinationAirportCodeAndDepartureTimeBetween(
-                        origin, destination, start, end
+                        origin,
+                        destination,
+                        start,
+                        end
                 );
     }
 
     @Override
     public Flight updateFlight(UUID flightId, Flight updated) {
-
         Flight flight = getFlightById(flightId);
 
+        flight.setFlightNumber(updated.getFlightNumber());
+        flight.setAirlineId(updated.getAirlineId());
+        flight.setOriginAirportCode(updated.getOriginAirportCode());
+        flight.setDestinationAirportCode(updated.getDestinationAirportCode());
         flight.setDepartureTime(updated.getDepartureTime());
         flight.setArrivalTime(updated.getArrivalTime());
+        flight.setDurationMinutes(updated.getDurationMinutes());
         flight.setAircraftType(updated.getAircraftType());
+        flight.setTotalSeats(updated.getTotalSeats());
+        flight.setAvailableSeats(updated.getAvailableSeats());
         flight.setBasePrice(updated.getBasePrice());
 
         return flightRepository.save(flight);
@@ -63,10 +73,8 @@ public class FlightServiceImpl implements FlightService {
 
     @Override
     public Flight updateStatus(UUID flightId, String status) {
-
         Flight flight = getFlightById(flightId);
-        flight.setStatus(FlightStatus.valueOf(status));
-
+        flight.setStatus(FlightStatus.valueOf(status.toUpperCase()));
         return flightRepository.save(flight);
     }
 

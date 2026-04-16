@@ -19,6 +19,7 @@ public class PassengerInfo {
     @GeneratedValue
     private UUID passengerId;
 
+    private UUID userId;
     private UUID bookingId;
 
     private String title;
