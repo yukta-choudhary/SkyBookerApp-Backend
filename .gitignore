@@ -16,5 +16,6 @@ airline-service/src/main/resources/application.yml
 flight-service/src/main/resources/application.yml
 booking-service/src/main/resources/application.yml
 passenger-service/src/main/resources/application.yml
+seat-service/src/main/resources/application.yml
 
 /.metadata/
