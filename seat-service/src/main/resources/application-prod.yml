@@ -6,17 +6,17 @@ spring:
     name: seat-service
 
   datasource:
-    url: jdbc:mysql://localhost:3306/skybooker_seat_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: root
-    password: Ishu2004
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/skybooker_seat_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
 
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: false
 
 springdoc:
   api-docs:
@@ -27,7 +27,7 @@ springdoc:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
 
@@ -39,8 +39,8 @@ management:
   endpoints:
     web:
       exposure:
-        include: "*"
+        include: health,info
 
 app:
   jwt:
-    secret: 9f3c7a1d5e8b4c6a2f9d1b7c3e6a8d5f2c4b7a9e1d6c3f8b2a5d7e9c1f3e6a8
+    secret: ${APP_JWT_SECRET}

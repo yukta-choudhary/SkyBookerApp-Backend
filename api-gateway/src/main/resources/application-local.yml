@@ -1,3 +1,6 @@
+# Local dev profile: routes directly to localhost ports without needing Eureka.
+# Run gateway with: --spring.profiles.active=local
+
 server:
   port: 8080
 
@@ -6,8 +9,10 @@ spring:
     name: api-gateway
 
   cloud:
+    discovery:
+      enabled: false
+
     gateway:
-      # IMPORTANT: fixes browser preflight (OPTIONS) issues through the gateway
       globalcors:
         add-to-simple-url-handler-mapping: true
         cors-configurations:
@@ -27,57 +32,45 @@ spring:
               - "Authorization"
             allowCredentials: true
 
-      # Eureka (lb://...) by default, but allow easy local override per service.
-      # Example:
-      #   AUTH_SERVICE_URI=http://localhost:8081
       routes:
         - id: auth-service
-          uri: ${AUTH_SERVICE_URI:lb://auth-service}
+          uri: http://localhost:8081
           predicates:
             - Path=/api/v1/auth/**
 
         - id: airline-service
-          uri: ${AIRLINE_SERVICE_URI:lb://airline-service}
+          uri: http://localhost:8082
           predicates:
             - Path=/api/v1/airlines/**
 
         - id: airport-routes-via-airline-service
-          uri: ${AIRLINE_SERVICE_URI:lb://airline-service}
+          uri: http://localhost:8082
           predicates:
             - Path=/api/v1/airports/**
 
         - id: flight-service
-          uri: ${FLIGHT_SERVICE_URI:lb://flight-service}
+          uri: http://localhost:8083
           predicates:
             - Path=/api/v1/flights/**
 
         - id: booking-service
-          uri: ${BOOKING_SERVICE_URI:lb://booking-service}
+          uri: http://localhost:8084
           predicates:
             - Path=/api/v1/bookings/**
 
         - id: passenger-service
-          uri: ${PASSENGER_SERVICE_URI:lb://passenger-service}
+          uri: http://localhost:8085
           predicates:
             - Path=/api/v1/passengers/**
 
         - id: seat-service
-          uri: ${SEAT_SERVICE_URI:lb://seat-service}
+          uri: http://localhost:8086
           predicates:
             - Path=/api/v1/seats/**
 
-# If Eureka is not running, lb:// routing will fail (gateway can’t resolve instances).
-# Start service-registry on 8761 OR use the 'local' profile below OR override *_SERVICE_URI env vars.
 eureka:
   client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-    register-with-eureka: true
-    fetch-registry: true
-
-  instance:
-    prefer-ip-address: true
-    instance-id: ${spring.application.name}:${server.port}
+    enabled: false
 
 management:
   endpoints:
