@@ -329,3 +329,89 @@ The **Payment Service** handles all financial transactions in the SkyBooker plat
 | GET | `/api/v1/payments/revenue` | ADMIN | Get total platform revenue |
 
 ---
+
+## Notification Service – SkyBooker
+
+The **Notification Service** is the multi-channel alert hub of the SkyBooker platform. It listens to Kafka events from `payment-service` and `flight-service`, dispatches transactional emails via **JavaMailSender (Gmail SMTP)**, stores in-app notifications with read/unread state, and runs a scheduled **check-in reminder** job every hour.
+
+### Features Implemented
+
+- **Kafka Event-Driven Notifications**
+  - Listens to `payment-success` topic → sends booking confirmation email + in-app notification
+  - Listens to `flight-status-changed` topic → sends flight delay / cancellation alerts to affected passengers
+
+- **Booking Confirmation Notification**
+  - Triggered automatically after successful payment via Kafka
+  - Sends a rich HTML email with PNR code, flight number, route, amount paid, and transaction ID
+  - Creates an in-app `BOOKING_CONFIRMED` notification with booking deep-link
+
+- **Flight Status Alerts**
+  - Triggered when airline staff marks a flight as DELAYED or CANCELLED
+  - Sends in-app alerts to all booked passengers for the affected flight
+
+- **Check-In Reminder Scheduler**
+  - Runs every hour via `@Scheduled(cron = "0 0 * * * *")`
+  - Calls `booking-service` to find confirmed bookings departing in 23–25 hours
+  - Sends in-app + email check-in reminder notifications automatically
+
+- **In-App Notification Centre**
+  - Persistent storage of all notifications per user
+  - Read / unread status with toggle support
+  - Unread count badge for the frontend notification bell
+  - Mark single or all notifications as read
+  - Delete individual notifications
+
+- **Admin Broadcast**
+  - Send a platform-wide notification to a list of user IDs
+  - Supports optional `targetRole` field for role-based targeting
+
+- **Notification Types Supported**
+  - `BOOKING_CONFIRMED`, `PAYMENT_SUCCESS`, `FLIGHT_DELAY`, `FLIGHT_CANCELLATION`, `GATE_CHANGE`, `CHECKIN_REMINDER`, `BOARDING`, `GENERAL`
+
+- **Notification Channels**
+  - `APP` — in-app notification centre
+  - `EMAIL` — transactional HTML emails via Gmail SMTP
+  - `SMS` — placeholder for future Twilio integration
+
+- **Security**
+  - JWT-based authentication for all endpoints
+  - CORS configured for Angular frontend (localhost:4200)
+
+- **Database Integration**
+  - MySQL-based persistence
+  - Tables: `notifications`
+  - Database: `skybooker_notification_db`
+
+- **API Documentation**
+  - Swagger/OpenAPI enabled at `/swagger-ui.html`
+
+### Key Endpoints
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| GET | `/api/v1/notifications/user/{userId}` | PASSENGER / ADMIN | Get all notifications for a user |
+| GET | `/api/v1/notifications/user/{userId}/unread` | PASSENGER / ADMIN | Get unread notifications |
+| GET | `/api/v1/notifications/user/{userId}/unread/count` | PASSENGER / ADMIN | Get unread notification count |
+| PUT | `/api/v1/notifications/{id}/read` | PASSENGER / ADMIN | Mark a notification as read |
+| PUT | `/api/v1/notifications/user/{userId}/read-all` | PASSENGER / ADMIN | Mark all notifications as read |
+| DELETE | `/api/v1/notifications/{id}` | PASSENGER / ADMIN | Delete a notification |
+| POST | `/api/v1/notifications/admin/broadcast` | ADMIN | Send broadcast notification to a list of users |
+
+---
+
+## Microservices Summary
+
+| Service | Port | Database | Description |
+|---------|------|----------|-------------|
+| service-registry | 8761 | — | Eureka Service Discovery |
+| api-gateway | 8080 | — | Spring Cloud Gateway — JWT validation + routing |
+| auth-service | 8081 | skybooker_auth_db | User registration, login, JWT, OAuth2 |
+| airline-service | 8082 | skybooker_airline_db | Airlines & airports master data |
+| flight-service | 8083 | skybooker_flight_db | Flight schedules, search, status + Kafka producer |
+| booking-service | 8084 | skybooker_booking_db | Booking lifecycle, PNR, ancillary add-ons, schedulers |
+| passenger-service | 8085 | skybooker_passenger_db | Passenger details, seat assignment, check-in |
+| seat-service | 8086 | skybooker_seat_db | Seat map, hold/release/confirm (optimistic locking) |
+| payment-service | 8087 | skybooker_payment_db | Razorpay integration, refunds, Kafka publisher |
+| notification-service | 8088 | skybooker_notification_db | Email, in-app alerts, Kafka consumer, schedulers |
+
+---
