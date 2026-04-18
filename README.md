@@ -266,3 +266,66 @@ The **Passenger Service** manages detailed passenger information associated with
 
 
 ---
+
+## Payment Service – SkyBooker
+
+The **Payment Service** handles all financial transactions in the SkyBooker platform. It integrates with the **Razorpay** payment gateway to initiate orders, verify webhook callbacks, process refunds, and publish payment success events to downstream services via **Kafka**.
+
+### Features Implemented
+
+- **Payment Initiation**
+  - Creates a Razorpay order for a booking
+  - Returns `razorpayOrderId`, `amount`, and `currency` to the frontend checkout
+  - Stores the payment record in `PENDING` status
+
+- **Payment Verification (Webhook/Callback)**
+  - Validates Razorpay signature using HMAC-SHA256 to prevent fraud
+  - Transitions payment status `PENDING` → `PAID` on success
+  - Calls `booking-service` to confirm the booking (`PENDING` → `CONFIRMED`)
+  - Publishes a `PaymentSuccessEvent` to Kafka topic `payment-success`
+
+- **Refund Processing**
+  - Initiates a Razorpay refund for eligible cancelled bookings
+  - Updates payment status to `REFUNDED` with refund amount and timestamp
+  - Supports partial and full refunds
+
+- **Payment Retrieval**
+  - Fetch payment record by booking ID
+  - Fetch all payments for a user
+  - Check payment status by payment ID
+
+- **Revenue Aggregation**
+  - Aggregate total revenue across all PAID transactions (Admin use)
+
+- **Payment Status Lifecycle**
+  - `PENDING` → `PAID` → (optionally) `REFUNDED`
+  - `PENDING` → `FAILED` (on gateway error)
+
+- **Kafka Integration**
+  - Publishes `PaymentSuccessEvent` to `payment-success` topic
+  - Consumed by `notification-service` to trigger booking confirmation email and in-app alert
+
+- **Security**
+  - JWT-based authentication for all endpoints
+  - CORS configured for Angular frontend (localhost:4200)
+
+- **Database Integration**
+  - MySQL-based persistence
+  - Tables: `payments`
+  - Database: `skybooker_payment_db`
+
+- **API Documentation**
+  - Swagger/OpenAPI enabled at `/swagger-ui.html`
+
+### Key Endpoints
+
+| Method | Endpoint | Role | Description |
+|--------|----------|------|-------------|
+| POST | `/api/v1/payments/initiate` | PASSENGER | Create Razorpay order for a booking |
+| POST | `/api/v1/payments/verify` | PASSENGER | Verify payment signature and confirm booking |
+| POST | `/api/v1/payments/refund/{paymentId}` | PASSENGER / ADMIN | Initiate refund |
+| GET | `/api/v1/payments/booking/{bookingId}` | PASSENGER / ADMIN | Get payment by booking |
+| GET | `/api/v1/payments/user/{userId}` | PASSENGER / ADMIN | Get all payments for a user |
+| GET | `/api/v1/payments/revenue` | ADMIN | Get total platform revenue |
+
+---
