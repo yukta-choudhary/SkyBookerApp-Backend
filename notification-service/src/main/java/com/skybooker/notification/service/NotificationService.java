@@ -1,5 +1,6 @@
 package com.skybooker.notification.service;
 
+import com.skybooker.notification.dto.BroadcastRequest;
 import com.skybooker.notification.entity.Notification;
 import com.skybooker.notification.enums.NotificationChannel;
 import com.skybooker.notification.enums.NotificationType;
@@ -29,4 +30,7 @@ public interface NotificationService {
     int markAllRead(UUID recipientId);
 
     void delete(UUID notificationId);
+
+    /** Sends a broadcast notification to a list of recipient IDs (admin use) */
+    List<Notification> sendBroadcast(BroadcastRequest request);
 }

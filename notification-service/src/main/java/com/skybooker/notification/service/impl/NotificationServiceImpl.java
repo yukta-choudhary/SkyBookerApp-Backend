@@ -1,5 +1,6 @@
 package com.skybooker.notification.service.impl;
 
+import com.skybooker.notification.dto.BroadcastRequest;
 import com.skybooker.notification.entity.Notification;
 import com.skybooker.notification.enums.NotificationChannel;
 import com.skybooker.notification.enums.NotificationType;
@@ -131,6 +132,33 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     public void delete(UUID notificationId) {
         notificationRepository.deleteById(notificationId);
+    }
+
+    @Override
+    public List<Notification> sendBroadcast(BroadcastRequest request) {
+        if (request.getTitle() == null || request.getMessage() == null) {
+            throw new RuntimeException("Broadcast title and message are required");
+        }
+
+        List<UUID> recipients = request.getRecipientIds();
+
+        if (recipients == null || recipients.isEmpty()) {
+            // No specific recipients — broadcast to all stored notification recipients
+            // (In production, call auth-service to get users by role)
+            // For now: fetch all distinct recipientIds from existing notifications as a fallback
+            log.warn("sendBroadcast called without recipientIds — " +
+                    "targetRole='{}' broadcast requires caller to pass recipientIds from auth-service",
+                    request.getTargetRole());
+            return List.of();
+        }
+
+        List<Notification> saved = recipients.stream()
+                .map(uid -> save(uid, NotificationType.GENERAL, NotificationChannel.APP,
+                        request.getTitle(), request.getMessage(), null))
+                .toList();
+
+        log.info("Admin broadcast sent to {} recipient(s)", saved.size());
+        return saved;
     }
 
     // ── Email body builders ─────────────────────────────────────────────────

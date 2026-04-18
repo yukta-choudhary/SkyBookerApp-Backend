@@ -1,5 +1,6 @@
 package com.skybooker.notification.controller;
 
+import com.skybooker.notification.dto.BroadcastRequest;
 import com.skybooker.notification.entity.Notification;
 import com.skybooker.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -53,5 +54,20 @@ public class NotificationController {
     public ResponseEntity<Void> delete(@PathVariable UUID notificationId) {
         notificationService.delete(notificationId);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Admin broadcast: send an in-app notification to a specified list of users.
+     * The frontend admin panel should first call GET /api/v1/auth/admin/users
+     * to get all user IDs, then pass them in recipientIds.
+     */
+    @PostMapping("/admin/broadcast")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> broadcast(@RequestBody BroadcastRequest request) {
+        List<Notification> sent = notificationService.sendBroadcast(request);
+        return ResponseEntity.ok(Map.of(
+                "sent", sent.size(),
+                "title", request.getTitle()
+        ));
     }
 }

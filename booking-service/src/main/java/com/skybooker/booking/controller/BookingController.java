@@ -1,8 +1,10 @@
 package com.skybooker.booking.controller;
 
+import com.skybooker.booking.dto.AddOnRequest;
 import com.skybooker.booking.entity.Booking;
 import com.skybooker.booking.service.BookingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,6 +47,12 @@ public class BookingController {
         return bookingService.getBookingsByFlight(flightId);
     }
 
+    @GetMapping("/user/{userId}/upcoming")
+    @PreAuthorize("hasAnyRole('PASSENGER','ADMIN')")
+    public ResponseEntity<List<Booking>> getUpcoming(@PathVariable UUID userId) {
+        return ResponseEntity.ok(bookingService.getUpcomingBookings(userId));
+    }
+
     @PutMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('PASSENGER','ADMIN')")
     public Booking cancel(@PathVariable UUID id) {
@@ -56,5 +64,13 @@ public class BookingController {
     @PreAuthorize("isAuthenticated()")
     public Booking confirm(@PathVariable UUID id) {
         return bookingService.confirmBooking(id);
+    }
+
+    @PostMapping("/{id}/addon")
+    @PreAuthorize("hasAnyRole('PASSENGER','ADMIN')")
+    public ResponseEntity<Booking> addAddOn(
+            @PathVariable UUID id,
+            @RequestBody AddOnRequest request) {
+        return ResponseEntity.ok(bookingService.addAddOn(id, request));
     }
 }

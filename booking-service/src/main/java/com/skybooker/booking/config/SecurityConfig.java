@@ -35,6 +35,9 @@ public class SecurityConfig {
                         // public booking lookup by PNR
                         .requestMatchers(HttpMethod.GET, "/api/v1/bookings/pnr/**").permitAll()
 
+                        // internal scheduler calls (notification-service check-in reminders)
+                        .requestMatchers("/api/v1/bookings/internal/**").permitAll()
+
                         // passenger actions
                         .requestMatchers(HttpMethod.POST, "/api/v1/bookings/**").hasRole("PASSENGER")
 

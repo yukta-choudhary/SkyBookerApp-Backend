@@ -1,5 +1,6 @@
 package com.skybooker.flight.controller;
 
+import com.skybooker.flight.dto.RoundTripResponse;
 import com.skybooker.flight.entity.Flight;
 import com.skybooker.flight.service.FlightService;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,20 @@ public class FlightController {
             @RequestParam String date
     ) {
         return flightService.searchFlights(origin, destination, LocalDate.parse(date));
+    }
+
+    @GetMapping("/search/round-trip")
+    public RoundTripResponse searchRoundTrip(
+            @RequestParam String origin,
+            @RequestParam String destination,
+            @RequestParam String departureDate,
+            @RequestParam String returnDate
+    ) {
+        return flightService.searchRoundTrip(
+                origin, destination,
+                LocalDate.parse(departureDate),
+                LocalDate.parse(returnDate)
+        );
     }
 
     @PutMapping("/{id}")

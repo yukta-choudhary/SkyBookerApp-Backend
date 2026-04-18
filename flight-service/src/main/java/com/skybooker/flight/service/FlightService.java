@@ -1,5 +1,6 @@
 package com.skybooker.flight.service;
 
+import com.skybooker.flight.dto.RoundTripResponse;
 import com.skybooker.flight.entity.Flight;
 
 import java.time.LocalDate;
@@ -15,6 +16,9 @@ public interface FlightService {
     List<Flight> getFlightsByAirline(UUID airlineId);
 
     List<Flight> searchFlights(String origin, String destination, LocalDate date);
+
+    RoundTripResponse searchRoundTrip(String origin, String destination,
+                                      LocalDate departureDate, LocalDate returnDate);
 
     Flight updateFlight(UUID flightId, Flight flight);
 

@@ -45,5 +45,9 @@ public class Booking {
 
     private LocalDateTime bookedAt;
 
+    /** Copied from flight at booking creation — used for scheduler queries */
+    @Column(name = "departure_time")
+    private LocalDateTime departureTime;
+
     private UUID paymentId;
 }
