@@ -80,6 +80,17 @@ public class BookingServiceImpl implements BookingService {
         return bookingRepository.save(booking);
     }
 
+    @Override
+    public Booking confirmBooking(UUID bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Booking not found: " + bookingId));
+        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+            return booking; // already confirmed, idempotent
+        }
+        booking.setStatus(BookingStatus.CONFIRMED);
+        return bookingRepository.save(booking);
+    }
+
     private String generatePnr() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 6).toUpperCase();
     }

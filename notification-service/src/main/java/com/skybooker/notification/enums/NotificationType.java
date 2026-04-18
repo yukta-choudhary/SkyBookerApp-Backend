@@ -1,0 +1,15 @@
+package com.skybooker.notification.enums;
+
+public enum NotificationType {
+    BOOKING_CONFIRMED,
+    BOOKING_CANCELLED,
+    PAYMENT_SUCCESS,
+    PAYMENT_FAILED,
+    PAYMENT_REFUNDED,
+    FLIGHT_DELAY,
+    FLIGHT_CANCELLATION,
+    GATE_CHANGE,
+    CHECKIN_REMINDER,
+    BOARDING_REMINDER,
+    GENERAL
+}

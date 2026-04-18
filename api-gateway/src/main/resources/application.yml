@@ -66,6 +66,16 @@ spring:
           predicates:
             - Path=/api/v1/seats/**
 
+        - id: payment-service
+          uri: ${PAYMENT_SERVICE_URI:lb://payment-service}
+          predicates:
+            - Path=/api/v1/payments/**
+
+        - id: notification-service
+          uri: ${NOTIFICATION_SERVICE_URI:lb://notification-service}
+          predicates:
+            - Path=/api/v1/notifications/**
+
 # If Eureka is not running, lb:// routing will fail (gateway can’t resolve instances).
 # Start service-registry on 8761 OR use the 'local' profile below OR override *_SERVICE_URI env vars.
 eureka:

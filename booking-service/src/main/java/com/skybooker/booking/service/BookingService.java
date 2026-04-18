@@ -18,4 +18,6 @@ public interface BookingService {
     List<Booking> getBookingsByFlight(UUID flightId);
 
     Booking cancelBooking(UUID bookingId);
+
+    Booking confirmBooking(UUID bookingId);
 }

@@ -50,4 +50,11 @@ public class BookingController {
     public Booking cancel(@PathVariable UUID id) {
         return bookingService.cancelBooking(id);
     }
+
+    // Called internally by payment-service after successful payment
+    @PutMapping("/{id}/confirm")
+    @PreAuthorize("isAuthenticated()")
+    public Booking confirm(@PathVariable UUID id) {
+        return bookingService.confirmBooking(id);
+    }
 }
