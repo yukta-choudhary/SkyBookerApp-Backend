@@ -27,9 +27,10 @@ spring:
               - "Authorization"
             allowCredentials: true
 
-      # Eureka (lb://...) by default, but allow easy local override per service.
-      # Example:
-      #   AUTH_SERVICE_URI=http://localhost:8081
+      # Global filter: deduplicate CORS headers that downstream services may also set
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin Access-Control-Allow-Methods Access-Control-Allow-Headers, RETAIN_FIRST
+
       routes:
         - id: auth-service
           uri: ${AUTH_SERVICE_URI:lb://auth-service}
@@ -87,6 +88,7 @@ eureka:
 
   instance:
     prefer-ip-address: true
+    ip-address: 127.0.0.1
     instance-id: ${spring.application.name}:${server.port}
 
 management:
