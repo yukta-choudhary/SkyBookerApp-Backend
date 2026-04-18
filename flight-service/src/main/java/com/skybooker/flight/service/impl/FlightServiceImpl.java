@@ -6,6 +6,7 @@ import com.skybooker.flight.repository.FlightRepository;
 import com.skybooker.flight.service.FlightService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -14,6 +15,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class FlightServiceImpl implements FlightService {
 
     private final FlightRepository flightRepository;

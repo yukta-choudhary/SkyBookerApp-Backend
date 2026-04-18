@@ -7,11 +7,13 @@ import com.skybooker.airline.repository.AirportRepository;
 import com.skybooker.airline.service.AirportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class AirportServiceImpl implements AirportService {
 
     private final AirportRepository airportRepository;

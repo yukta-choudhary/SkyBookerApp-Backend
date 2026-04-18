@@ -1,4 +1,4 @@
-package com.skybooker.auth.config;
+package com.skybooker.seat.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

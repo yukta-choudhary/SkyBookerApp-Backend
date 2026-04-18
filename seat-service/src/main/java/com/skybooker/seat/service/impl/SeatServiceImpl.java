@@ -112,8 +112,8 @@ public class SeatServiceImpl implements SeatService {
         seat.setSeatClass(request.getSeatClass());
         seat.setRowNumber(request.getRowNumber());
         seat.setColumnValue(request.getColumnValue());
-        seat.setWindow(request.isWindow());
-        seat.setAisle(request.isAisle());
+        seat.setWindowSeat(request.isWindowSeat());
+        seat.setAisleSeat(request.isAisleSeat());
         seat.setHasExtraLegroom(request.isHasExtraLegroom());
         seat.setStatus(request.getStatus());
         seat.setPriceMultiplier(request.getPriceMultiplier());
@@ -145,18 +145,10 @@ public class SeatServiceImpl implements SeatService {
     @Override
     @Scheduled(fixedRate = 120000)
     public void releaseExpiredHolds() {
-        List<Seat> allSeats = seatRepository.findAll();
-        LocalDateTime now = LocalDateTime.now();
-
-        allSeats.stream()
-                .filter(seat -> seat.getStatus() == SeatStatus.HELD)
-                .filter(seat -> seat.getHoldExpiresAt() != null)
-                .filter(seat -> seat.getHoldExpiresAt().isBefore(now))
-                .forEach(seat -> {
-                    seat.setStatus(SeatStatus.AVAILABLE);
-                    seat.setHoldExpiresAt(null);
-                    seatRepository.save(seat);
-                });
+        int released = seatRepository.releaseExpiredHolds(LocalDateTime.now());
+        if (released > 0) {
+            // log if needed
+        }
     }
 
     private Seat mapToSeat(UUID flightId, CreateSeatRequest request) {
@@ -166,8 +158,8 @@ public class SeatServiceImpl implements SeatService {
                 .seatClass(request.getSeatClass())
                 .rowNumber(request.getRowNumber())
                 .columnValue(request.getColumnValue())
-                .isWindow(request.isWindow())
-                .isAisle(request.isAisle())
+                .windowSeat(request.isWindowSeat())
+                .aisleSeat(request.isAisleSeat())
                 .hasExtraLegroom(request.isHasExtraLegroom())
                 .status(SeatStatus.AVAILABLE)
                 .priceMultiplier(request.getPriceMultiplier())

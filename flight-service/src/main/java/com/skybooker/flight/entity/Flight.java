@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
+@Table(name = "flights")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -32,6 +33,7 @@ public class Flight {
     private Integer durationMinutes;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "flight_status")
     private FlightStatus status;
 
     private String aircraftType;

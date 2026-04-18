@@ -28,8 +28,8 @@ public class UpdateSeatRequest {
     @NotBlank
     private String columnValue;
 
-    private boolean isWindow;
-    private boolean isAisle;
+    private boolean windowSeat;
+    private boolean aisleSeat;
     private boolean hasExtraLegroom;
 
     @NotNull

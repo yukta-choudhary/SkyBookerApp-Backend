@@ -7,20 +7,26 @@ import com.skybooker.passenger.service.PassengerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class PassengerServiceImpl implements PassengerService {
 
     private final PassengerRepository passengerRepository;
 
     @Override
     public PassengerInfo addPassenger(PassengerInfo passenger) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AccessDeniedException("Authentication required to add a passenger");
+        }
         passenger.setPassengerId(null);
-        passenger.setUserId(SecurityUtils.getCurrentUserId());
+        passenger.setUserId(currentUserId);
         passenger.setTicketNumber(generateTicketNumber());
         return passengerRepository.save(passenger);
     }

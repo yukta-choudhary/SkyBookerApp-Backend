@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
+@Table(name = "bookings")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -29,6 +30,7 @@ public class Booking {
     private TripType tripType;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "booking_status")
     private BookingStatus status;
 
     private Double totalFare;

@@ -8,6 +8,7 @@ import com.skybooker.booking.service.BookingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,14 +16,19 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
 
     @Override
     public Booking createBooking(Booking booking) {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AccessDeniedException("Authentication required to create a booking");
+        }
         booking.setBookingId(null);
-        booking.setUserId(SecurityUtils.getCurrentUserId());
+        booking.setUserId(currentUserId);
         booking.setBookedAt(LocalDateTime.now());
         booking.setStatus(BookingStatus.PENDING);
         booking.setPnrCode(generatePnr());

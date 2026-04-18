@@ -1,45 +1,14 @@
 package com.skybooker.gateway.config;
 
-import org.springframework.cloud.gateway.route.RouteLocator;
-import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
-@Configuration
+/**
+ * Routes are configured via application.yml using Eureka load-balanced (lb://) URIs.
+ * Programmatic route configuration here is intentionally disabled to avoid
+ * duplicate routes. See application.yml spring.cloud.gateway.routes for the active config.
+ *
+ * For local development without Eureka, set environment variables like:
+ *   AUTH_SERVICE_URI=http://localhost:8081
+ * or use the local profile: application-local.yml
+ */
 public class GatewayRoutesConfig {
-
-    @Bean
-    public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
-        return builder.routes()
-
-                .route("auth-service", r -> r
-                        .path("/api/v1/auth/**")
-                        .uri("http://127.0.0.1:8081"))
-
-                .route("airline-service", r -> r
-                        .path("/api/v1/airlines/**")
-                        .uri("http://127.0.0.1:8082"))
-
-                .route("airport-service", r -> r
-                        .path("/api/v1/airports/**")
-                        .uri("http://127.0.0.1:8082"))
-
-                .route("flight-service", r -> r
-                        .path("/api/v1/flights/**")
-                        .uri("http://127.0.0.1:8083"))
-
-                .route("booking-service", r -> r
-                        .path("/api/v1/bookings/**")
-                        .uri("http://127.0.0.1:8084"))
-
-                .route("passenger-service", r -> r
-                        .path("/api/v1/passengers/**")
-                        .uri("http://127.0.0.1:8085"))
-
-                .route("seat-service", r -> r
-                        .path("/api/v1/seats/**")
-                        .uri("http://127.0.0.1:8086"))
-
-                .build();
-    }
+    // Routes defined in application.yml — no programmatic bean needed.
 }
