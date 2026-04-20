@@ -124,17 +124,22 @@ public class PaymentServiceImpl implements PaymentService {
             // Don't fail payment — booking will be confirmed via retry/manual
         }
 
-        // 5. Publish Kafka event for notification-service
-        PaymentSuccessEvent event = PaymentSuccessEvent.builder()
-                .paymentId(payment.getPaymentId())
-                .bookingId(payment.getBookingId())
-                .userId(payment.getUserId())
-                .amount(payment.getAmount())
-                .currency(payment.getCurrency())
-                .razorpayPaymentId(request.getRazorpayPaymentId())
-                .build();
-        kafkaTemplate.send("payment-success", payment.getBookingId().toString(), event);
-        log.info("Published payment-success event for booking {}", payment.getBookingId());
+        // 5. Publish Kafka event for notification-service (non-blocking — log warning if Kafka unavailable)
+        try {
+            PaymentSuccessEvent event = PaymentSuccessEvent.builder()
+                    .paymentId(payment.getPaymentId())
+                    .bookingId(payment.getBookingId())
+                    .userId(payment.getUserId())
+                    .amount(payment.getAmount())
+                    .currency(payment.getCurrency())
+                    .razorpayPaymentId(request.getRazorpayPaymentId())
+                    .build();
+            kafkaTemplate.send("payment-success", payment.getBookingId().toString(), event);
+            log.info("Published payment-success event for booking {}", payment.getBookingId());
+        } catch (Exception e) {
+            log.warn("Could not publish payment-success Kafka event (Kafka may be unavailable): {}", e.getMessage());
+            // Payment is still successful — Kafka is optional for local dev
+        }
 
         return toResponse(payment);
     }
