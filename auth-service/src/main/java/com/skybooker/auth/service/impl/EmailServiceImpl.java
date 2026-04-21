@@ -37,4 +37,27 @@ public class EmailServiceImpl implements EmailService {
                 """.formatted(fullName, resetLink, appProperties.getPasswordReset().getExpirationMinutes()));
         javaMailSender.send(message);
     }
+
+    @Override
+    public void sendPasswordResetOtp(String to, String fullName, String otp, long expirationMinutes) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(appProperties.getMail().getFrom());
+        message.setTo(to);
+        message.setSubject("SkyBooker Password Reset OTP");
+        message.setText("""
+                Hello %s,
+
+                Your SkyBooker password reset OTP is:
+
+                    %s
+
+                This OTP will expire in %d minutes.
+
+                If you did not request this, please ignore this email.
+
+                Regards,
+                SkyBooker Team
+                """.formatted(fullName, otp, expirationMinutes));
+        javaMailSender.send(message);
+    }
 }

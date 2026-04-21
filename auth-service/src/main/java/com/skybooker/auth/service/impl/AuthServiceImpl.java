@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 
 @Service
@@ -268,16 +269,17 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public MessageResponse forgotPassword(ForgotPasswordRequest request) {
-        log.info("Forgot password request for email={}", request.getEmail());
+        log.info("Forgot password (OTP) request for email={}", request.getEmail());
 
         userRepository.findByEmail(request.getEmail().toLowerCase()).ifPresent(user -> {
             if (user.getProvider() == AuthProvider.LOCAL) {
                 passwordResetTokenRepository.deleteByUser(user);
 
-                String token = UUID.randomUUID().toString();
+                // Generate 6-digit OTP
+                String otp = String.format("%06d", new Random().nextInt(999999));
 
                 PasswordResetToken resetToken = PasswordResetToken.builder()
-                        .token(token)
+                        .token(otp)
                         .user(user)
                         .expiresAt(LocalDateTime.now().plusMinutes(
                                 appProperties.getPasswordReset().getExpirationMinutes()))
@@ -286,14 +288,40 @@ public class AuthServiceImpl implements AuthService {
 
                 passwordResetTokenRepository.save(resetToken);
 
-                String resetLink = appProperties.getFrontendBaseUrl() + "/reset-password?token=" + token;
-
-                log.info("Password reset token created for email={}", user.getEmail());
-                emailService.sendPasswordResetEmail(user.getEmail(), user.getFullName(), resetLink);
+                log.info("OTP generated for email={}", user.getEmail());
+                emailService.sendPasswordResetOtp(user.getEmail(), user.getFullName(), otp,
+                        appProperties.getPasswordReset().getExpirationMinutes());
             }
         });
 
-        return new MessageResponse("If the email exists, a password reset link has been sent");
+        return new MessageResponse("If the email exists, an OTP has been sent");
+    }
+
+    @Override
+    public AuthResponse verifyOtp(String email, String otp) {
+        log.info("Verify OTP request for email={}", email);
+
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByTokenAndUsedFalse(otp)
+                .orElseThrow(() -> new BadRequestException("Invalid or expired OTP"));
+
+        if (resetToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("OTP has expired");
+        }
+
+        if (!resetToken.getUser().getEmail().equalsIgnoreCase(email)) {
+            throw new BadRequestException("Invalid OTP for this email");
+        }
+
+        // Generate a one-time reset token for the password reset step
+        String resetUuid = UUID.randomUUID().toString();
+        resetToken.setToken(resetUuid);
+        passwordResetTokenRepository.save(resetToken);
+
+        log.info("OTP verified for email={}, issuing reset token", email);
+        return AuthResponse.builder()
+                .message("OTP verified successfully")
+                .accessToken(resetUuid)  // Reuse accessToken field to carry the reset token
+                .build();
     }
 
     @Override

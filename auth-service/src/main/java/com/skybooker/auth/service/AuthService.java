@@ -18,5 +18,6 @@ public interface AuthService {
     List<UserSummaryResponse> getAllUsers();
     List<UserSummaryResponse> getUsersByRole(String role);
     MessageResponse forgotPassword(ForgotPasswordRequest request);
+    AuthResponse verifyOtp(String email, String otp);
     MessageResponse resetPassword(ResetPasswordRequest request);
 }

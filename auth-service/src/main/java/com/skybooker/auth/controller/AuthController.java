@@ -134,7 +134,17 @@ public class AuthController {
         return ResponseEntity.ok(authService.forgotPassword(request));
     }
 
-    @Operation(summary = "Reset Password", description = "Reset password using a valid, unexpired reset token from the email link.")
+    @Operation(summary = "Verify OTP", description = "Verify the 6-digit OTP sent to the user's email. Returns a reset token for the final password reset step.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "OTP verified — returns reset token"),
+        @ApiResponse(responseCode = "400", description = "Invalid or expired OTP")
+    })
+    @PostMapping("/verify-otp")
+    public ResponseEntity<AuthResponse> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
+        return ResponseEntity.ok(authService.verifyOtp(request.getEmail(), request.getOtp()));
+    }
+
+    @Operation(summary = "Reset Password", description = "Reset password using a valid, unexpired reset token from the OTP verification step.")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Password reset successful"),
         @ApiResponse(responseCode = "400", description = "Invalid, used, or expired token")
