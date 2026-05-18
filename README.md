@@ -62,8 +62,9 @@ The backend is architected as **10 independently deployable Spring Boot microser
 
 - **Java 17+**
 - **MySQL 8.x** — running locally on port `3306`
+- **Redis 7.x** — required for token blacklist, OTP storage, caching, and rate limiting
 - **Apache Kafka** — required for event-driven notifications (optional for basic booking flow)
-- **Docker** — recommended for running Kafka/Zookeeper (see below)
+- **Docker** — recommended for running Kafka/Zookeeper/Redis (see below)
 
 ---
 
@@ -79,7 +80,11 @@ Ensure MySQL is running on `localhost:3306`. All databases are auto-created via 
 docker-compose up -d
 ```
 
-This starts **Zookeeper** (port `2181`) and **Kafka** (port `9092`) using Confluent images. Kafka is required for:
+This starts:
+- **Zookeeper** (port `2181`) and **Kafka** (port `9092`) — event streaming
+- **Redis** (port `6379`) — in-memory cache, token store, and rate limiting
+
+Kafka is required for:
 - `payment-success` topic — triggers booking confirmation emails
 - `flight-status-changed` topic — triggers flight delay/cancellation alerts
 
@@ -127,6 +132,61 @@ The payment service uses **Razorpay** for processing payments. The following **T
 5. Backend verifies HMAC-SHA256 signature, marks payment as `PAID`, confirms the booking, and publishes a Kafka event
 
 > These credentials are configured in `payment-service/src/main/resources/application.yml` under the `razorpay:` section.
+
+---
+
+## Redis Integration
+
+Redis (`localhost:6379`) is used across multiple microservices as an in-memory data store. It is started automatically via `docker-compose up -d`.
+
+### Redis Usage by Service
+
+| Service | Redis Purpose | Key Pattern | TTL |
+|---------|--------------|-------------|-----|
+| **auth-service** | JWT token blacklist | `blacklist:{token}` | Matches JWT remaining expiry |
+| **auth-service** | OTP storage for password reset | `otp:{email}` | 30 min (configurable) |
+| **auth-service** | Reset token storage | `reset:{uuid}` | 30 min (configurable) |
+| **flight-service** | Flight search results cache | `flightSearch::{key}` | 5 min |
+| **seat-service** | Seat hold TTL tracking | `seat-hold:{seatId}` | 15 min |
+| **notification-service** | Unread notification counter | `unread:{userId}` | No expiry (managed by app) |
+| **api-gateway** | Rate limiting (auth endpoints) | `request_rate_limiter.{...}` | Sliding window |
+
+### Demonstrating Redis (Redis CLI)
+
+Connect to the Redis container:
+```bash
+docker exec -it skybooker-redis redis-cli
+```
+
+Useful commands for presentation:
+```bash
+# View all stored keys
+KEYS *
+
+# After logout — see blacklisted JWT token
+KEYS blacklist:*
+TTL blacklist:<token>
+
+# After forgot-password — see OTP
+GET otp:user@test.com
+TTL otp:user@test.com
+
+# After holding a seat — see TTL countdown
+KEYS seat-hold:*
+TTL seat-hold:<seatId>
+
+# Notification unread count
+GET unread:<userId>
+
+# Flight search cache
+KEYS flightSearch*
+
+# Rate limiter counters
+KEYS request_rate_limiter*
+
+# Live stream of all Redis commands in real-time
+MONITOR
+```
 
 ---
 

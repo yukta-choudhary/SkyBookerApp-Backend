@@ -11,6 +11,7 @@ import com.skybooker.notification.service.EmailService;
 import com.skybooker.notification.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,8 +24,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NotificationServiceImpl implements NotificationService {
 
+    private static final String UNREAD_PREFIX = "unread:";
+
     private final NotificationRepository notificationRepository;
     private final EmailService emailService;
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     public Notification save(UUID recipientId, NotificationType type, NotificationChannel channel,
@@ -38,7 +42,16 @@ public class NotificationServiceImpl implements NotificationService {
                 .relatedBookingId(relatedBookingId)
                 .isRead(false)
                 .build();
-        return notificationRepository.save(notification);
+        Notification saved = notificationRepository.save(notification);
+
+        // Increment unread counter in Redis
+        try {
+            redisTemplate.opsForValue().increment(UNREAD_PREFIX + recipientId.toString());
+        } catch (Exception e) {
+            log.warn("Failed to increment Redis unread counter: {}", e.getMessage());
+        }
+
+        return saved;
     }
 
     @Override
@@ -113,20 +126,58 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional(readOnly = true)
     public long getUnreadCount(UUID recipientId) {
-        return notificationRepository.countByRecipientIdAndIsReadFalse(recipientId);
+        // Try Redis first
+        try {
+            String cached = redisTemplate.opsForValue().get(UNREAD_PREFIX + recipientId.toString());
+            if (cached != null) {
+                return Long.parseLong(cached);
+            }
+        } catch (Exception e) {
+            log.warn("Redis unread counter unavailable, falling back to DB: {}", e.getMessage());
+        }
+
+        // Fallback: query DB and seed Redis
+        long count = notificationRepository.countByRecipientIdAndIsReadFalse(recipientId);
+        try {
+            redisTemplate.opsForValue().set(UNREAD_PREFIX + recipientId.toString(), String.valueOf(count));
+        } catch (Exception e) {
+            log.warn("Failed to seed Redis unread counter: {}", e.getMessage());
+        }
+        return count;
     }
 
     @Override
     public Notification markAsRead(UUID notificationId) {
         Notification n = notificationRepository.findById(notificationId)
                 .orElseThrow(() -> new RuntimeException("Notification not found: " + notificationId));
-        n.setIsRead(true);
-        return notificationRepository.save(n);
+
+        if (!Boolean.TRUE.equals(n.getIsRead())) {
+            n.setIsRead(true);
+            n = notificationRepository.save(n);
+            // Decrement unread counter in Redis
+            try {
+                Long current = redisTemplate.opsForValue().decrement(UNREAD_PREFIX + n.getRecipientId().toString());
+                if (current != null && current < 0) {
+                    redisTemplate.opsForValue().set(UNREAD_PREFIX + n.getRecipientId().toString(), "0");
+                }
+            } catch (Exception e) {
+                log.warn("Failed to decrement Redis unread counter: {}", e.getMessage());
+            }
+        }
+
+        return n;
     }
 
     @Override
     public int markAllRead(UUID recipientId) {
-        return notificationRepository.markAllReadByRecipient(recipientId);
+        int updated = notificationRepository.markAllReadByRecipient(recipientId);
+        // Reset unread counter in Redis
+        try {
+            redisTemplate.delete(UNREAD_PREFIX + recipientId.toString());
+        } catch (Exception e) {
+            log.warn("Failed to reset Redis unread counter: {}", e.getMessage());
+        }
+        return updated;
     }
 
     @Override

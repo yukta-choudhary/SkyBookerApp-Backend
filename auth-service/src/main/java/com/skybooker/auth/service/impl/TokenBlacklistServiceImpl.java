@@ -1,39 +1,47 @@
 package com.skybooker.auth.service.impl;
 
-import com.skybooker.auth.entity.TokenBlacklist;
-import com.skybooker.auth.repository.TokenBlacklistRepository;
 import com.skybooker.auth.service.JwtService;
 import com.skybooker.auth.service.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.scheduling.annotation.Scheduled;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.Duration;
+import java.util.Date;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TokenBlacklistServiceImpl implements TokenBlacklistService {
 
-    private final TokenBlacklistRepository tokenBlacklistRepository;
+    private static final String BLACKLIST_PREFIX = "blacklist:";
+
+    private final StringRedisTemplate redisTemplate;
     private final JwtService jwtService;
 
     @Override
     public void blacklist(String token) {
-        tokenBlacklistRepository.save(TokenBlacklist.builder()
-                .tokenValue(token)
-                .expiresAt(LocalDateTime.ofInstant(jwtService.extractExpiration(token).toInstant(), ZoneId.systemDefault()))
-                .build());
+        Date expiration = jwtService.extractExpiration(token);
+        long remainingMs = expiration.getTime() - System.currentTimeMillis();
+
+        if (remainingMs > 0) {
+            redisTemplate.opsForValue().set(
+                    BLACKLIST_PREFIX + token, "1",
+                    Duration.ofMillis(remainingMs)
+            );
+            log.info("Token blacklisted in Redis with TTL={}s", remainingMs / 1000);
+        }
     }
 
     @Override
     public boolean isBlacklisted(String token) {
-        return tokenBlacklistRepository.existsByTokenValue(token);
+        return Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_PREFIX + token));
     }
 
     @Override
-    @Scheduled(cron = "0 */30 * * * *")
     public void cleanupExpiredTokens() {
-        tokenBlacklistRepository.deleteByExpiresAtBefore(LocalDateTime.now());
+        // No-op: Redis TTL auto-expires blacklisted tokens
+        log.debug("Token cleanup is handled by Redis TTL — no action needed");
     }
 }
