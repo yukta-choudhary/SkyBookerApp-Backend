@@ -38,4 +38,5 @@ public class EmailServiceImpl implements EmailService {
             throw new RuntimeException("Email sending failed: " + e.getMessage());
         }
     }
+
 }

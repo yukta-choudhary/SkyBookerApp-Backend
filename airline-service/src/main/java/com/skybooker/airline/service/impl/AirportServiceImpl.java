@@ -87,4 +87,10 @@ public class AirportServiceImpl implements AirportService {
                 keyword, keyword, keyword
         );
     }
+
+    @Override
+    public void deleteAirport(String airportId) {
+        Airport airport = getAirportById(airportId);
+        airportRepository.delete(airport);
+    }
 }

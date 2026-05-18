@@ -24,7 +24,9 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -113,18 +115,9 @@ public class PaymentServiceImpl implements PaymentService {
         payment = paymentRepository.save(payment);
 
         // 4. Confirm booking via REST call to booking-service
-        try {
-            restTemplate.put(
-                    bookingServiceUrl + "/api/v1/bookings/" + payment.getBookingId() + "/confirm",
-                    null
-            );
-            log.info("Booking {} confirmed after successful payment", payment.getBookingId());
-        } catch (Exception e) {
-            log.error("Failed to confirm booking {}: {}", payment.getBookingId(), e.getMessage());
-            // Don't fail payment — booking will be confirmed via retry/manual
-        }
+        confirmBookingAfterPayment(payment.getBookingId());
 
-        // 5. Publish Kafka event for notification-service (non-blocking — log warning if Kafka unavailable)
+        // 5. Publish Kafka event for notification-service (non-blocking; log warning if Kafka unavailable)
         try {
             PaymentSuccessEvent event = PaymentSuccessEvent.builder()
                     .paymentId(payment.getPaymentId())
@@ -138,7 +131,6 @@ public class PaymentServiceImpl implements PaymentService {
             log.info("Published payment-success event for booking {}", payment.getBookingId());
         } catch (Exception e) {
             log.warn("Could not publish payment-success Kafka event (Kafka may be unavailable): {}", e.getMessage());
-            // Payment is still successful — Kafka is optional for local dev
         }
 
         return toResponse(payment);
@@ -204,7 +196,41 @@ public class PaymentServiceImpl implements PaymentService {
         return paymentRepository.getTotalRevenue();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Integer, Double> getMonthlyRevenue(int year) {
+        Map<Integer, Double> revenueByMonth = new LinkedHashMap<>();
+        for (int month = 1; month <= 12; month++) {
+            revenueByMonth.put(month, 0.0);
+        }
+
+        for (Object[] row : paymentRepository.getMonthlyRevenue(year)) {
+            Number month = (Number) row[0];
+            Number revenue = (Number) row[1];
+            revenueByMonth.put(month.intValue(), revenue.doubleValue());
+        }
+
+        return revenueByMonth;
+    }
+
     // ─── Helpers ────────────────────────────────────────────────────────────
+
+    private void confirmBookingAfterPayment(UUID bookingId) {
+        String confirmUrl = bookingServiceUrl + "/api/v1/bookings/internal/" + bookingId + "/confirm";
+
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                restTemplate.put(confirmUrl, null);
+                log.info("Booking {} confirmed after successful payment", bookingId);
+                return;
+            } catch (Exception e) {
+                log.warn("Attempt {}/3 failed to confirm booking {}: {}", attempt, bookingId, e.getMessage());
+                if (attempt == 3) {
+                    throw new RuntimeException("Payment verified, but booking confirmation failed. Please retry verification or contact support.", e);
+                }
+            }
+        }
+    }
 
     private boolean verifySignature(String orderId, String paymentId, String signature) {
         try {

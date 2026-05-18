@@ -50,7 +50,7 @@ The backend is architected as **10 independently deployable Spring Boot microser
 | auth-service | 8081 | skybooker_auth_db | User registration, login, JWT, profile, password reset |
 | airline-service | 8082 | skybooker_airline_db | Airlines & airports master data |
 | flight-service | 8083 | skybooker_flight_db | Flight schedules, search, status + Kafka producer |
-| booking-service | 8084 | skybooker_booking_db | Booking lifecycle, PNR, ancillary add-ons, schedulers |
+| booking-service | 8084 | skybooker_booking_db | Booking lifecycle, PNR, ancillary add-ons, check-in reminder support |
 | passenger-service | 8085 | skybooker_passenger_db | Passenger details, seat assignment, ticket generation |
 | seat-service | 8086 | skybooker_seat_db | Seat map, hold/release/confirm (optimistic locking) |
 | payment-service | 8087 | skybooker_payment_db | Razorpay integration, refunds, Kafka publisher |
@@ -239,17 +239,16 @@ Manages flight schedules and inventory. Supports one-way and round-trip search, 
 
 ## Booking Service
 
-Central orchestration service managing the complete booking lifecycle. Generates unique PNR codes, stores fare breakdowns, manages ancillary add-ons, and runs a **no-show detection** scheduler every 30 minutes.
+Central orchestration service managing the complete booking lifecycle. Generates unique PNR codes, stores fare breakdowns, and manages ancillary add-ons.
 
 ### Features
 
 - **Booking Creation** — Linked to `userId` and `flightId`, auto-generates 6-character PNR code
-- **Booking Lifecycle** — `PENDING` → `CONFIRMED` → `COMPLETED` / `CANCELLED` / `NO_SHOW`
+- **Booking Lifecycle** — `PENDING` → `CONFIRMED` → `COMPLETED` / `CANCELLED`
 - **PNR-Based Lookup** — Public endpoint for retrieving bookings by PNR
 - **My Bookings Dashboard** — All bookings and upcoming bookings for a user
 - **Ancillary Add-Ons** — Meal preference (`VEG`, `NON_VEG`, `JAIN`, `VEGAN`) and extra luggage
 - **Fare Storage** — `baseFare`, `taxes`, and `totalFare` with `ONE_WAY` and `ROUND_TRIP` support
-- **No-Show Detection Scheduler** — Runs every 30 minutes; marks stale `CONFIRMED` bookings as `NO_SHOW`
 - **Internal Scheduler Endpoint** — Used by notification-service for check-in reminders
 - **Database** — MySQL (`skybooker_booking_db`), tables: `bookings`
 

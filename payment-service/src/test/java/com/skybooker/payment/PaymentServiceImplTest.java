@@ -18,10 +18,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -161,6 +167,42 @@ class PaymentServiceImplTest {
         assertThat(payments).isEmpty();
     }
 
+    // ===== VERIFY PAYMENT TESTS =====
+
+    @Test
+    @DisplayName("VerifyPayment: should mark payment paid and confirm booking")
+    void verifyPayment_shouldMarkPaidAndConfirmBooking() {
+        PaymentVerificationRequest request = verificationRequest();
+        when(paymentRepository.findByRazorpayOrderId(testPayment.getRazorpayOrderId()))
+                .thenReturn(Optional.of(testPayment));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentResponse response = paymentService.verifyAndConfirmPayment(request);
+
+        assertThat(response.getStatus()).isEqualTo(PaymentStatus.PAID);
+        assertThat(response.getRazorpayPaymentId()).isEqualTo(request.getRazorpayPaymentId());
+        assertThat(response.getTransactionId()).isEqualTo(request.getRazorpayPaymentId());
+        assertThat(response.getPaidAt()).isNotNull();
+        verify(restTemplate).put("http://localhost:8084/api/v1/bookings/internal/" + bookingId + "/confirm", null);
+    }
+
+    @Test
+    @DisplayName("VerifyPayment: should fail after retries when booking cannot be confirmed")
+    void verifyPayment_shouldThrow_whenBookingConfirmationFails() {
+        PaymentVerificationRequest request = verificationRequest();
+        when(paymentRepository.findByRazorpayOrderId(testPayment.getRazorpayOrderId()))
+                .thenReturn(Optional.of(testPayment));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doThrow(new RestClientException("booking-service unavailable"))
+                .when(restTemplate).put(anyString(), isNull());
+
+        assertThatThrownBy(() -> paymentService.verifyAndConfirmPayment(request))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("booking confirmation failed");
+
+        verify(restTemplate, times(3)).put("http://localhost:8084/api/v1/bookings/internal/" + bookingId + "/confirm", null);
+    }
+
     // ===== REFUND TESTS =====
 
     @Test
@@ -210,5 +252,41 @@ class PaymentServiceImplTest {
         Double revenue = paymentService.getTotalRevenue();
 
         assertThat(revenue).isZero();
+    }
+
+    @Test
+    @DisplayName("GetMonthlyRevenue: should return all months with repository values filled in")
+    void getMonthlyRevenue_shouldReturnAllMonths() {
+        when(paymentRepository.getMonthlyRevenue(2026)).thenReturn(List.of(
+                new Object[] { 5, 25000.0 },
+                new Object[] { 6, 17500.0 }
+        ));
+
+        Map<Integer, Double> revenue = paymentService.getMonthlyRevenue(2026);
+
+        assertThat(revenue).hasSize(12);
+        assertThat(revenue.get(1)).isZero();
+        assertThat(revenue.get(5)).isEqualTo(25000.0);
+        assertThat(revenue.get(6)).isEqualTo(17500.0);
+    }
+
+    private PaymentVerificationRequest verificationRequest() {
+        PaymentVerificationRequest request = new PaymentVerificationRequest();
+        request.setBookingId(bookingId);
+        request.setRazorpayOrderId(testPayment.getRazorpayOrderId());
+        request.setRazorpayPaymentId("pay_testId123");
+        request.setRazorpaySignature(signatureFor(request.getRazorpayOrderId(), request.getRazorpayPaymentId()));
+        return request;
+    }
+
+    private String signatureFor(String orderId, String paymentId) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec("test_secret_key_32chars_long_x1234".getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] hash = mac.doFinal((orderId + "|" + paymentId).getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

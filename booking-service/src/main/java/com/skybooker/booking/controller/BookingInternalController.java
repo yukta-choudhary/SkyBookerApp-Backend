@@ -2,15 +2,19 @@ package com.skybooker.booking.controller;
 
 import com.skybooker.booking.entity.Booking;
 import com.skybooker.booking.repository.BookingRepository;
+import com.skybooker.booking.service.BookingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Internal-only endpoints consumed by other microservices (notification-service scheduler).
@@ -22,6 +26,7 @@ import java.util.List;
 public class BookingInternalController {
 
     private final BookingRepository bookingRepository;
+    private final BookingService bookingService;
 
     /**
      * Returns confirmed bookings departing within a specific time window.
@@ -34,5 +39,10 @@ public class BookingInternalController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
         return bookingRepository.findConfirmedDepartingBetween(from, to);
+    }
+
+    @PutMapping("/{id}/confirm")
+    public Booking confirmBooking(@PathVariable UUID id) {
+        return bookingService.confirmBooking(id);
     }
 }

@@ -143,6 +143,11 @@ public class SeatServiceImpl implements SeatService {
     }
 
     @Override
+    public void deleteSeatsForFlightByClass(UUID flightId, SeatClass seatClass) {
+        seatRepository.deleteByFlightIdAndSeatClass(flightId, seatClass);
+    }
+
+    @Override
     @Scheduled(fixedRate = 120000)
     public void releaseExpiredHolds() {
         int released = seatRepository.releaseExpiredHolds(LocalDateTime.now());

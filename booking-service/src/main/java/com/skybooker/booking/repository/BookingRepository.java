@@ -33,8 +33,4 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
            "AND b.departureTime BETWEEN :windowStart AND :windowEnd")
     List<Booking> findConfirmedDepartingBetween(LocalDateTime windowStart, LocalDateTime windowEnd);
 
-    /** Confirmed bookings whose departure has passed — candidates for NO_SHOW */
-    @Query("SELECT b FROM Booking b WHERE b.status = 'CONFIRMED' " +
-           "AND b.departureTime IS NOT NULL AND b.departureTime < :cutoff")
-    List<Booking> findConfirmedPastDeparture(LocalDateTime cutoff);
 }

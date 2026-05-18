@@ -36,8 +36,6 @@ public class Flight {
     @Column(name = "flight_status")
     private FlightStatus status;
 
-    private String aircraftType;
-
     private Integer totalSeats;
     private Integer availableSeats;
 

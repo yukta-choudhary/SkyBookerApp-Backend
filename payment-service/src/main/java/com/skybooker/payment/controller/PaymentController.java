@@ -116,6 +116,16 @@ public class PaymentController {
         return ResponseEntity.ok(Map.of("totalRevenue", paymentService.getTotalRevenue()));
     }
 
+    @Operation(
+        summary = "Get Monthly Revenue (Admin)",
+        description = "Returns PAID payment revenue grouped by month for the requested year. Requires ADMIN role."
+    )
+    @GetMapping("/admin/revenue/monthly")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<Integer, Double>> getMonthlyRevenue(@RequestParam(defaultValue = "2026") int year) {
+        return ResponseEntity.ok(paymentService.getMonthlyRevenue(year));
+    }
+
     private UUID extractUserId(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {

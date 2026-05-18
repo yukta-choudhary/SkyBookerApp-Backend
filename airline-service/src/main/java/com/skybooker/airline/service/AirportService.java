@@ -14,4 +14,5 @@ public interface AirportService {
     List<Airport> getAirportsByCity(String city);
     List<Airport> getAirportsByCountry(String country);
     List<Airport> searchAirports(String keyword);
+    void deleteAirport(String airportId);
 }

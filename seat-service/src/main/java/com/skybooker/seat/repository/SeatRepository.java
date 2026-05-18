@@ -29,6 +29,8 @@ public interface SeatRepository extends JpaRepository<Seat, UUID> {
 
     void deleteByFlightId(UUID flightId);
 
+    void deleteByFlightIdAndSeatClass(UUID flightId, SeatClass seatClass);
+
     /**
      * Efficiently find only HELD seats whose hold has expired, avoiding loading all seats.
      */

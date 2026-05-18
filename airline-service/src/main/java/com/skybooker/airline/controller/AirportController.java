@@ -58,4 +58,10 @@ public class AirportController {
     public ResponseEntity<List<Airport>> search(@RequestParam String keyword) {
         return ResponseEntity.ok(airportService.searchAirports(keyword));
     }
+
+    @DeleteMapping("/{airportId}")
+    public ResponseEntity<Void> delete(@PathVariable String airportId) {
+        airportService.deleteAirport(airportId);
+        return ResponseEntity.noContent().build();
+    }
 }

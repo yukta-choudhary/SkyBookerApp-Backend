@@ -89,4 +89,11 @@ public class SeatController {
     public void deleteSeatsForFlight(@PathVariable UUID flightId) {
         seatService.deleteSeatsForFlight(flightId);
     }
+
+    @DeleteMapping("/flight/{flightId}/class/{seatClass}")
+    @PreAuthorize("hasAnyRole('AIRLINE_STAFF','ADMIN')")
+    public void deleteSeatsForFlightByClass(@PathVariable UUID flightId,
+                                            @PathVariable SeatClass seatClass) {
+        seatService.deleteSeatsForFlightByClass(flightId, seatClass);
+    }
 }

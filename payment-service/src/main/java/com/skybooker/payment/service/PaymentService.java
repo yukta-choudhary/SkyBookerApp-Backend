@@ -7,6 +7,7 @@ import com.skybooker.payment.dto.RefundRequest;
 import com.skybooker.payment.entity.Payment;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public interface PaymentService {
@@ -24,4 +25,6 @@ public interface PaymentService {
     PaymentResponse refundPayment(RefundRequest request);
 
     Double getTotalRevenue();
+
+    Map<Integer, Double> getMonthlyRevenue(int year);
 }

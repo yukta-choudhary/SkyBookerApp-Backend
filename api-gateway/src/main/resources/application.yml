@@ -32,6 +32,16 @@ spring:
         - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin Access-Control-Allow-Methods Access-Control-Allow-Headers, RETAIN_FIRST
 
       routes:
+        - id: auth-oauth2
+          uri: ${AUTH_SERVICE_URI:lb://auth-service}
+          predicates:
+            - Path=/oauth2/**
+
+        - id: auth-login-oauth2
+          uri: ${AUTH_SERVICE_URI:lb://auth-service}
+          predicates:
+            - Path=/login/oauth2/**
+
         - id: auth-service
           uri: ${AUTH_SERVICE_URI:lb://auth-service}
           predicates:

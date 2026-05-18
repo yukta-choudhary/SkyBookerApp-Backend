@@ -4,6 +4,7 @@ import com.skybooker.payment.entity.Payment;
 import com.skybooker.payment.enums.PaymentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,5 +26,14 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Double getTotalRevenue();
 
     @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.status = 'PAID' AND p.userId = :userId")
-    Double getTotalSpentByUser(UUID userId);
+    Double getTotalSpentByUser(@Param("userId") UUID userId);
+
+    @Query("""
+            SELECT MONTH(p.paidAt), COALESCE(SUM(p.amount), 0)
+            FROM Payment p
+            WHERE p.status = 'PAID' AND YEAR(p.paidAt) = :year
+            GROUP BY MONTH(p.paidAt)
+            ORDER BY MONTH(p.paidAt)
+            """)
+    List<Object[]> getMonthlyRevenue(@Param("year") int year);
 }

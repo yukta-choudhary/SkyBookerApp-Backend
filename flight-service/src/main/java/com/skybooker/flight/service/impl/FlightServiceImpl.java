@@ -12,6 +12,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,6 +30,7 @@ public class FlightServiceImpl implements FlightService {
     @Override
     public Flight addFlight(Flight flight) {
         flight.setAvailableSeats(flight.getTotalSeats());
+        flight.setDurationMinutes(calculateDurationMinutes(flight.getDepartureTime(), flight.getArrivalTime()));
         if (flight.getStatus() == null) {
             flight.setStatus(FlightStatus.ON_TIME);
         }
@@ -79,8 +81,7 @@ public class FlightServiceImpl implements FlightService {
         flight.setDestinationAirportCode(updated.getDestinationAirportCode());
         flight.setDepartureTime(updated.getDepartureTime());
         flight.setArrivalTime(updated.getArrivalTime());
-        flight.setDurationMinutes(updated.getDurationMinutes());
-        flight.setAircraftType(updated.getAircraftType());
+        flight.setDurationMinutes(calculateDurationMinutes(updated.getDepartureTime(), updated.getArrivalTime()));
         flight.setTotalSeats(updated.getTotalSeats());
         flight.setAvailableSeats(updated.getAvailableSeats());
         flight.setBasePrice(updated.getBasePrice());
@@ -119,5 +120,16 @@ public class FlightServiceImpl implements FlightService {
     @Override
     public void deleteFlight(UUID flightId) {
         flightRepository.deleteById(flightId);
+    }
+
+    private Integer calculateDurationMinutes(LocalDateTime departureTime, LocalDateTime arrivalTime) {
+        if (departureTime == null || arrivalTime == null) {
+            return null;
+        }
+        long minutes = Duration.between(departureTime, arrivalTime).toMinutes();
+        if (minutes <= 0) {
+            throw new RuntimeException("Arrival time must be after departure time");
+        }
+        return Math.toIntExact(minutes);
     }
 }

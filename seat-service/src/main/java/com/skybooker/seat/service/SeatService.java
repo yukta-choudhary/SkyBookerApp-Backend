@@ -32,5 +32,7 @@ public interface SeatService {
 
     void deleteSeatsForFlight(UUID flightId);
 
+    void deleteSeatsForFlightByClass(UUID flightId, SeatClass seatClass);
+
     void releaseExpiredHolds();
 }

@@ -55,7 +55,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         String refreshToken = jwtService.generateToken(user.getEmail(), user.getRole().name(), user.getUserId(), "REFRESH");
 
         String redirectUrl = appProperties.getFrontendBaseUrl()
-                + "/oauth-success?accessToken=" + URLEncoder.encode(accessToken, StandardCharsets.UTF_8)
+                + "/#/oauth-success?accessToken=" + URLEncoder.encode(accessToken, StandardCharsets.UTF_8)
                 + "&refreshToken=" + URLEncoder.encode(refreshToken, StandardCharsets.UTF_8)
                 + "&email=" + URLEncoder.encode(user.getEmail(), StandardCharsets.UTF_8);
 

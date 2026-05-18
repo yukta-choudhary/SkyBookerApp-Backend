@@ -55,7 +55,6 @@ class FlightServiceImplTest {
                 .arrivalTime(LocalDateTime.now().plusDays(1).plusHours(2))
                 .durationMinutes(120)
                 .status(FlightStatus.ON_TIME)
-                .aircraftType("Boeing 737")
                 .totalSeats(180)
                 .availableSeats(150)
                 .basePrice(4500.0)

@@ -70,4 +70,5 @@ public class NotificationController {
                 "title", request.getTitle()
         ));
     }
+
 }

@@ -43,7 +43,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public void handlePaymentSuccess(PaymentSuccessEvent event) {
-        String title = "Booking Confirmed! ✈️";
+        String title = "Booking Confirmed";
         String pnr = event.getPnrCode() != null ? event.getPnrCode() : "N/A";
         String message = String.format(
                 "Your booking (PNR: %s) is confirmed. Amount paid: ₹%.2f. Have a great flight!",
@@ -171,23 +171,23 @@ public class NotificationServiceImpl implements NotificationService {
                 ? event.getOrigin() + " → " + event.getDestination() : "N/A";
 
         return String.format("""
-                <html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: auto;">
-                <div style="background: #1a73e8; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-                  <h1 style="margin:0;">✈️ SkyBooker</h1>
-                  <p style="margin:5px 0;">Booking Confirmed!</p>
+                <html><body style="font-family: Arial, sans-serif; max-width: 640px; margin: auto; background:#f4f2fa; padding:24px;">
+                <div style="background: #5b38ff; color: white; padding: 24px; border-radius: 18px 18px 0 0;">
+                  <h1 style="margin:0;font-size:26px;">SkyBooker</h1>
+                  <p style="margin:6px 0 0;">Your booking is confirmed</p>
                 </div>
-                <div style="padding: 24px; background: #f9f9f9;">
+                <div style="padding: 24px; background: #ffffff; border-radius: 0 0 18px 18px;">
                   <p>Dear <strong>%s</strong>,</p>
-                  <p>Your booking has been <strong>confirmed</strong>. Here are your details:</p>
-                  <table style="width:100%%; border-collapse: collapse; margin: 16px 0;">
-                    <tr style="background:#e8f0fe;"><td style="padding:10px;"><strong>PNR Code</strong></td><td style="padding:10px;"><strong>%s</strong></td></tr>
-                    <tr><td style="padding:10px;">Flight</td><td style="padding:10px;">%s</td></tr>
-                    <tr style="background:#e8f0fe;"><td style="padding:10px;">Route</td><td style="padding:10px;">%s</td></tr>
-                    <tr><td style="padding:10px;">Amount Paid</td><td style="padding:10px;">₹%.2f %s</td></tr>
-                    <tr style="background:#e8f0fe;"><td style="padding:10px;">Transaction ID</td><td style="padding:10px;">%s</td></tr>
+                  <p>Your payment was successful. Your booking is confirmed.</p>
+                  <table style="width:100%%; border-collapse: collapse; margin: 18px 0; border:1px solid #ede9f6;">
+                    <tr style="background:#f4f2fa;"><td style="padding:12px;"><strong>PNR Code</strong></td><td style="padding:12px;"><strong>%s</strong></td></tr>
+                    <tr><td style="padding:12px;">Flight</td><td style="padding:12px;">%s</td></tr>
+                    <tr style="background:#f4f2fa;"><td style="padding:12px;">Route</td><td style="padding:12px;">%s</td></tr>
+                    <tr><td style="padding:12px;">Amount Paid</td><td style="padding:12px;">%.2f %s</td></tr>
+                    <tr style="background:#f4f2fa;"><td style="padding:12px;">Transaction ID</td><td style="padding:12px;">%s</td></tr>
                   </table>
                   <p>Please check in online 24 hours before departure.</p>
-                  <p style="color:#666; font-size:12px;">This is an automated email. Please do not reply.</p>
+                  <p style="color:#80798e; font-size:12px;">This is an automated email. Please do not reply.</p>
                 </div>
                 </body></html>
                 """,
