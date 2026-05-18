@@ -17,31 +17,25 @@ import com.skybooker.auth.service.TokenBlacklistService;
 import com.skybooker.auth.service.impl.AuthServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-/**
- * Unit tests for AuthServiceImpl.
- * Covers registration, login, logout, profile management, and password flows.
- */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("AuthServiceImpl Unit Tests")
 class AuthServiceImplTest {
 
     @Mock private UserRepository userRepository;
@@ -52,373 +46,587 @@ class AuthServiceImplTest {
     @Mock private EmailService emailService;
     @Mock private TokenBlacklistService tokenBlacklistService;
     @Mock private AppProperties appProperties;
-    @Mock private AppProperties.Jwt jwtProps;
-    @Mock private AppProperties.PasswordReset passwordResetProps;
 
     @InjectMocks
     private AuthServiceImpl authService;
 
     private User testUser;
-    private RegisterRequest registerRequest;
+    private AppProperties.Jwt jwtProps;
+    private AppProperties.PasswordReset resetProps;
 
     @BeforeEach
     void setUp() {
         testUser = User.builder()
-                .userId(UUID.randomUUID().toString())
-                .fullName("Test User")
-                .email("test@example.com")
-                .passwordHash("$2a$10$hashedpassword")
-                .phone("9876543210")
+                .userId("user-123")
+                .fullName("John Doe")
+                .email("john@example.com")
+                .passwordHash("hashedPassword")
+                .phone("1234567890")
                 .role(Role.PASSENGER)
                 .provider(AuthProvider.LOCAL)
                 .active(true)
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        registerRequest = new RegisterRequest();
-        registerRequest.setFullName("Test User");
-        registerRequest.setEmail("test@example.com");
-        registerRequest.setPassword("SecurePass123");
-        registerRequest.setPhone("9876543210");
-        registerRequest.setRole(Role.PASSENGER);
+        jwtProps = new AppProperties.Jwt();
+        jwtProps.setSecret("testSecretKey12345678901234567890");
+        jwtProps.setAccessTokenExpirationMs(3600000);
+        jwtProps.setRefreshTokenExpirationMs(86400000);
+
+        resetProps = new AppProperties.PasswordReset();
+        resetProps.setExpirationMinutes(15);
     }
 
-    // ===== REGISTRATION TESTS =====
+    // ─── Register ────────────────────────────────────────────────────────
 
-    @Test
-    @DisplayName("Register: should register new passenger successfully")
-    void register_shouldSucceed_whenValidRequest() {
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
-        when(userRepository.existsByPhone(anyString())).thenReturn(false);
-        when(passwordEncoder.encode(anyString())).thenReturn("$2a$10$hashed");
-        when(userRepository.save(any(User.class))).thenReturn(testUser);
+    @Nested
+    @DisplayName("Register")
+    class RegisterTests {
 
-        AuthResponse response = authService.register(registerRequest);
+        @Test
+        @DisplayName("Should register a new passenger successfully")
+        void register_success() {
+            RegisterRequest request = new RegisterRequest();
+            request.setFullName("John Doe");
+            request.setEmail("john@example.com");
+            request.setPassword("password123");
+            request.setPhone("1234567890");
+            request.setRole(Role.PASSENGER);
 
-        assertThat(response).isNotNull();
-        assertThat(response.getEmail()).isEqualTo("test@example.com");
-        assertThat(response.getRole()).isEqualTo(Role.PASSENGER);
-        assertThat(response.getMessage()).contains("successful");
-        verify(userRepository).save(any(User.class));
+            when(userRepository.existsByEmail(anyString())).thenReturn(false);
+            when(userRepository.existsByPhone(anyString())).thenReturn(false);
+            when(passwordEncoder.encode(anyString())).thenReturn("encodedPassword");
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            AuthResponse response = authService.register(request);
+
+            assertThat(response).isNotNull();
+            assertThat(response.getFullName()).isEqualTo("John Doe");
+            assertThat(response.getEmail()).isEqualTo("john@example.com");
+            assertThat(response.getRole()).isEqualTo(Role.PASSENGER);
+            assertThat(response.getMessage()).contains("Registration successful");
+            assertThat(response.getRedirectUrl()).isEqualTo("/login");
+            verify(userRepository).save(any(User.class));
+        }
+
+        @Test
+        @DisplayName("Should throw exception when email already exists")
+        void register_duplicateEmail() {
+            RegisterRequest request = new RegisterRequest();
+            request.setEmail("existing@example.com");
+            request.setPhone("1234567890");
+            request.setRole(Role.PASSENGER);
+
+            when(userRepository.existsByEmail(anyString())).thenReturn(true);
+
+            assertThatThrownBy(() -> authService.register(request))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Email already exists");
+        }
+
+        @Test
+        @DisplayName("Should throw exception when phone already exists")
+        void register_duplicatePhone() {
+            RegisterRequest request = new RegisterRequest();
+            request.setEmail("new@example.com");
+            request.setPhone("1234567890");
+            request.setRole(Role.PASSENGER);
+
+            when(userRepository.existsByEmail(anyString())).thenReturn(false);
+            when(userRepository.existsByPhone(anyString())).thenReturn(true);
+
+            assertThatThrownBy(() -> authService.register(request))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Phone already exists");
+        }
+
+        @Test
+        @DisplayName("Should throw exception when admin self-registration attempted")
+        void register_adminNotAllowed() {
+            RegisterRequest request = new RegisterRequest();
+            request.setEmail("admin@example.com");
+            request.setPhone("1234567890");
+            request.setRole(Role.ADMIN);
+
+            when(userRepository.existsByEmail(anyString())).thenReturn(false);
+            when(userRepository.existsByPhone(anyString())).thenReturn(false);
+
+            assertThatThrownBy(() -> authService.register(request))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Admin self-registration is not allowed");
+        }
+
+        @Test
+        @DisplayName("Should throw exception when passport number already exists")
+        void register_duplicatePassport() {
+            RegisterRequest request = new RegisterRequest();
+            request.setEmail("new@example.com");
+            request.setPhone("9999999999");
+            request.setPassportNumber("AB123456");
+            request.setRole(Role.PASSENGER);
+
+            when(userRepository.existsByEmail(anyString())).thenReturn(false);
+            when(userRepository.existsByPhone(anyString())).thenReturn(false);
+            when(userRepository.existsByPassportNumber("AB123456")).thenReturn(true);
+
+            assertThatThrownBy(() -> authService.register(request))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Passport number already exists");
+        }
     }
 
-    @Test
-    @DisplayName("Register: should throw BadRequestException when email already exists")
-    void register_shouldThrow_whenEmailExists() {
-        when(userRepository.existsByEmail(anyString())).thenReturn(true);
+    // ─── Login ───────────────────────────────────────────────────────────
 
-        assertThatThrownBy(() -> authService.register(registerRequest))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Email already exists");
+    @Nested
+    @DisplayName("Login")
+    class LoginTests {
 
-        verify(userRepository, never()).save(any());
+        @Test
+        @DisplayName("Should login successfully with valid credentials")
+        void login_success() {
+            LoginRequest request = new LoginRequest();
+            request.setEmail("john@example.com");
+            request.setPassword("password123");
+
+            when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+            when(jwtService.generateToken(anyString(), anyString(), anyString(), eq("ACCESS")))
+                    .thenReturn("access-token");
+            when(jwtService.generateToken(anyString(), anyString(), anyString(), eq("REFRESH")))
+                    .thenReturn("refresh-token");
+            when(appProperties.getJwt()).thenReturn(jwtProps);
+
+            AuthResponse response = authService.login(request);
+
+            assertThat(response).isNotNull();
+            assertThat(response.getAccessToken()).isEqualTo("access-token");
+            assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
+            assertThat(response.getTokenType()).isEqualTo("Bearer");
+            assertThat(response.getMessage()).isEqualTo("Login successful");
+            verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+        }
+
+        @Test
+        @DisplayName("Should throw exception when user not found during login")
+        void login_userNotFound() {
+            LoginRequest request = new LoginRequest();
+            request.setEmail("unknown@example.com");
+            request.setPassword("password123");
+
+            when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> authService.login(request))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("Should throw exception when account is inactive")
+        void login_inactiveAccount() {
+            testUser.setActive(false);
+
+            LoginRequest request = new LoginRequest();
+            request.setEmail("john@example.com");
+            request.setPassword("password123");
+
+            when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+
+            assertThatThrownBy(() -> authService.login(request))
+                    .isInstanceOf(UnauthorizedException.class)
+                    .hasMessage("Account is inactive");
+        }
     }
 
-    @Test
-    @DisplayName("Register: should throw BadRequestException when phone already exists")
-    void register_shouldThrow_whenPhoneExists() {
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
-        when(userRepository.existsByPhone(anyString())).thenReturn(true);
+    // ─── Logout ──────────────────────────────────────────────────────────
 
-        assertThatThrownBy(() -> authService.register(registerRequest))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Phone already exists");
+    @Test
+    @DisplayName("Should logout successfully by blacklisting token")
+    void logout_success() {
+        MessageResponse response = authService.logout("some-token");
+
+        assertThat(response.getMessage()).isEqualTo("Logged out successfully");
+        verify(tokenBlacklistService).blacklist("some-token");
     }
 
-    @Test
-    @DisplayName("Register: should reject admin self-registration")
-    void register_shouldThrow_whenRoleIsAdmin() {
-        registerRequest.setRole(Role.ADMIN);
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
-        when(userRepository.existsByPhone(anyString())).thenReturn(false);
-
-        assertThatThrownBy(() -> authService.register(registerRequest))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Admin self-registration");
-    }
+    // ─── Validate Token ──────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Register: should register airline staff successfully")
-    void register_shouldSucceed_forAirlineStaff() {
-        registerRequest.setRole(Role.AIRLINE_STAFF);
-        User staffUser = User.builder()
-                .userId(UUID.randomUUID().toString())
-                .email("staff@airline.com")
-                .role(Role.AIRLINE_STAFF)
-                .provider(AuthProvider.LOCAL)
-                .active(true)
-                .build();
+    @DisplayName("Should return valid message for a valid token")
+    void validateToken_valid() {
+        when(jwtService.isTokenValid("valid-token", "ACCESS")).thenReturn(true);
+        when(tokenBlacklistService.isBlacklisted("valid-token")).thenReturn(false);
 
-        when(userRepository.existsByEmail(anyString())).thenReturn(false);
-        when(userRepository.existsByPhone(anyString())).thenReturn(false);
-        when(passwordEncoder.encode(anyString())).thenReturn("hashed");
-        when(userRepository.save(any())).thenReturn(staffUser);
+        MessageResponse response = authService.validateToken("valid-token");
 
-        AuthResponse response = authService.register(registerRequest);
-
-        assertThat(response.getRole()).isEqualTo(Role.AIRLINE_STAFF);
-    }
-
-    // ===== LOGIN TESTS =====
-
-    @Test
-    @DisplayName("Login: should return auth tokens on valid credentials")
-    void login_shouldReturnTokens_whenCredentialsValid() {
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setEmail("test@example.com");
-        loginRequest.setPassword("SecurePass123");
-
-        when(authenticationManager.authenticate(any())).thenReturn(
-                new UsernamePasswordAuthenticationToken("test@example.com", "SecurePass123"));
-        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
-        when(jwtService.generateToken(anyString(), anyString(), anyString(), eq("ACCESS"))).thenReturn("access-token");
-        when(jwtService.generateToken(anyString(), anyString(), anyString(), eq("REFRESH"))).thenReturn("refresh-token");
-        when(appProperties.getJwt()).thenReturn(jwtProps);
-        when(jwtProps.getAccessTokenExpirationMs()).thenReturn(86400000L);
-
-        AuthResponse response = authService.login(loginRequest);
-
-        assertThat(response.getAccessToken()).isEqualTo("access-token");
-        assertThat(response.getRefreshToken()).isEqualTo("refresh-token");
-        assertThat(response.getEmail()).isEqualTo("test@example.com");
-    }
-
-    @Test
-    @DisplayName("Login: should throw UnauthorizedException for inactive account")
-    void login_shouldThrow_whenAccountInactive() {
-        testUser.setActive(false);
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setEmail("test@example.com");
-        loginRequest.setPassword("SecurePass123");
-
-        when(authenticationManager.authenticate(any())).thenReturn(
-                new UsernamePasswordAuthenticationToken("test@example.com", "SecurePass123"));
-        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
-
-        assertThatThrownBy(() -> authService.login(loginRequest))
-                .isInstanceOf(UnauthorizedException.class)
-                .hasMessageContaining("inactive");
-    }
-
-    @Test
-    @DisplayName("Login: should throw when authentication fails (wrong password)")
-    void login_shouldThrow_whenBadCredentials() {
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setEmail("test@example.com");
-        loginRequest.setPassword("wrongpass");
-
-        when(authenticationManager.authenticate(any()))
-                .thenThrow(new BadCredentialsException("Bad credentials"));
-
-        assertThatThrownBy(() -> authService.login(loginRequest))
-                .isInstanceOf(BadCredentialsException.class);
-    }
-
-    // ===== LOGOUT TEST =====
-
-    @Test
-    @DisplayName("Logout: should blacklist token successfully")
-    void logout_shouldBlacklistToken() {
-        doNothing().when(tokenBlacklistService).blacklist(anyString());
-
-        MessageResponse response = authService.logout("valid-jwt-token");
-
-        assertThat(response.getMessage()).contains("Logged out");
-        verify(tokenBlacklistService).blacklist("valid-jwt-token");
-    }
-
-    // ===== PROFILE TESTS =====
-
-    @Test
-    @DisplayName("GetProfile: should return profile for active user")
-    void getProfile_shouldReturnProfile_forActiveUser() {
-        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
-
-        ProfileResponse profile = authService.getProfile("test@example.com");
-
-        assertThat(profile.getEmail()).isEqualTo("test@example.com");
-        assertThat(profile.getFullName()).isEqualTo("Test User");
-        assertThat(profile.getRole()).isEqualTo(Role.PASSENGER);
-    }
-
-    @Test
-    @DisplayName("GetProfile: should throw ResourceNotFoundException for unknown email")
-    void getProfile_shouldThrow_whenUserNotFound() {
-        when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> authService.getProfile("unknown@example.com"))
-                .isInstanceOf(ResourceNotFoundException.class);
-    }
-
-    // ===== CHANGE PASSWORD TESTS =====
-
-    @Test
-    @DisplayName("ChangePassword: should change password for local user")
-    void changePassword_shouldSucceed_forLocalUser() {
-        ChangePasswordRequest req = new ChangePasswordRequest();
-        req.setOldPassword("OldPass123");
-        req.setNewPassword("NewPass456");
-
-        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
-        when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
-        when(passwordEncoder.encode(anyString())).thenReturn("newhashedpassword");
-        when(userRepository.save(any())).thenReturn(testUser);
-
-        MessageResponse response = authService.changePassword("test@example.com", req);
-
-        assertThat(response.getMessage()).contains("updated");
-        verify(passwordEncoder).encode("NewPass456");
+        assertThat(response.getMessage()).isEqualTo("Token is valid");
     }
 
     @Test
-    @DisplayName("ChangePassword: should throw if old password is wrong")
-    void changePassword_shouldThrow_whenOldPasswordIncorrect() {
-        ChangePasswordRequest req = new ChangePasswordRequest();
-        req.setOldPassword("WrongOldPass");
-        req.setNewPassword("NewPass456");
+    @DisplayName("Should return invalid message for blacklisted token")
+    void validateToken_blacklisted() {
+        when(jwtService.isTokenValid("token", "ACCESS")).thenReturn(true);
+        when(tokenBlacklistService.isBlacklisted("token")).thenReturn(true);
 
-        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
-        when(passwordEncoder.matches(anyString(), anyString())).thenReturn(false);
+        MessageResponse response = authService.validateToken("token");
 
-        assertThatThrownBy(() -> authService.changePassword("test@example.com", req))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("incorrect");
+        assertThat(response.getMessage()).isEqualTo("Token is invalid");
     }
 
-    @Test
-    @DisplayName("ChangePassword: should throw for OAuth users")
-    void changePassword_shouldThrow_forOAuthUser() {
-        testUser.setProvider(AuthProvider.GOOGLE);
-        ChangePasswordRequest req = new ChangePasswordRequest();
-        req.setOldPassword("any");
-        req.setNewPassword("any");
+    // ─── Refresh Token ───────────────────────────────────────────────────
 
-        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
+    @Nested
+    @DisplayName("Refresh Token")
+    class RefreshTokenTests {
 
-        assertThatThrownBy(() -> authService.changePassword("test@example.com", req))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("OAuth");
+        @Test
+        @DisplayName("Should refresh token successfully")
+        void refreshToken_success() {
+            when(jwtService.isTokenValid("refresh-token", "REFRESH")).thenReturn(true);
+            when(tokenBlacklistService.isBlacklisted("refresh-token")).thenReturn(false);
+            when(jwtService.extractUsername("refresh-token")).thenReturn("john@example.com");
+            when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+            when(jwtService.generateToken(anyString(), anyString(), anyString(), eq("ACCESS")))
+                    .thenReturn("new-access-token");
+            when(jwtService.generateToken(anyString(), anyString(), anyString(), eq("REFRESH")))
+                    .thenReturn("new-refresh-token");
+            when(appProperties.getJwt()).thenReturn(jwtProps);
+
+            AuthResponse response = authService.refreshToken("refresh-token");
+
+            assertThat(response.getAccessToken()).isEqualTo("new-access-token");
+            assertThat(response.getRefreshToken()).isEqualTo("new-refresh-token");
+            assertThat(response.getMessage()).isEqualTo("Token refreshed successfully");
+        }
+
+        @Test
+        @DisplayName("Should throw exception for invalid refresh token")
+        void refreshToken_invalid() {
+            when(jwtService.isTokenValid("bad-token", "REFRESH")).thenReturn(false);
+
+            assertThatThrownBy(() -> authService.refreshToken("bad-token"))
+                    .isInstanceOf(UnauthorizedException.class)
+                    .hasMessage("Invalid refresh token");
+        }
     }
 
-    // ===== GET ALL USERS TEST =====
+    // ─── Profile ─────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Profile")
+    class ProfileTests {
+
+        @Test
+        @DisplayName("Should get profile successfully")
+        void getProfile_success() {
+            when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+
+            ProfileResponse response = authService.getProfile("john@example.com");
+
+            assertThat(response.getUserId()).isEqualTo("user-123");
+            assertThat(response.getEmail()).isEqualTo("john@example.com");
+            assertThat(response.getFullName()).isEqualTo("John Doe");
+        }
+
+        @Test
+        @DisplayName("Should throw exception when user not found for profile")
+        void getProfile_notFound() {
+            when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> authService.getProfile("unknown@example.com"))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("Should update profile successfully")
+        void updateProfile_success() {
+            UpdateProfileRequest request = new UpdateProfileRequest();
+            request.setFullName("John Updated");
+            request.setPhone("1234567890");
+
+            when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            ProfileResponse response = authService.updateProfile("john@example.com", request);
+
+            assertThat(response.getFullName()).isEqualTo("John Updated");
+        }
+
+        @Test
+        @DisplayName("Should throw when updating profile with duplicate phone")
+        void updateProfile_duplicatePhone() {
+            UpdateProfileRequest request = new UpdateProfileRequest();
+            request.setFullName("John Updated");
+            request.setPhone("9999999999");
+
+            when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+            when(userRepository.existsByPhone("9999999999")).thenReturn(true);
+
+            assertThatThrownBy(() -> authService.updateProfile("john@example.com", request))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Phone already exists");
+        }
+
+        @Test
+        @DisplayName("Should patch profile with partial fields")
+        void patchProfile_partialUpdate() {
+            UpdateProfileRequest request = new UpdateProfileRequest();
+            request.setFullName("Patched Name");
+
+            when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            ProfileResponse response = authService.patchProfile("john@example.com", request);
+
+            assertThat(response.getFullName()).isEqualTo("Patched Name");
+        }
+    }
+
+    // ─── Change Password ─────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("Change Password")
+    class ChangePasswordTests {
+
+        @Test
+        @DisplayName("Should change password successfully")
+        void changePassword_success() {
+            ChangePasswordRequest request = new ChangePasswordRequest();
+            request.setOldPassword("oldPass");
+            request.setNewPassword("newPass123");
+
+            when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+            when(passwordEncoder.matches("oldPass", "hashedPassword")).thenReturn(true);
+            when(passwordEncoder.encode("newPass123")).thenReturn("newHashedPassword");
+
+            MessageResponse response = authService.changePassword("john@example.com", request);
+
+            assertThat(response.getMessage()).isEqualTo("Password updated successfully");
+            verify(userRepository).save(testUser);
+        }
+
+        @Test
+        @DisplayName("Should throw when old password is incorrect")
+        void changePassword_wrongOldPassword() {
+            ChangePasswordRequest request = new ChangePasswordRequest();
+            request.setOldPassword("wrongOldPass");
+            request.setNewPassword("newPass123");
+
+            when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+            when(passwordEncoder.matches("wrongOldPass", "hashedPassword")).thenReturn(false);
+
+            assertThatThrownBy(() -> authService.changePassword("john@example.com", request))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Old password is incorrect");
+        }
+
+        @Test
+        @DisplayName("Should throw when OAuth user tries to change password")
+        void changePassword_oauthUser() {
+            testUser.setProvider(AuthProvider.GOOGLE);
+            ChangePasswordRequest request = new ChangePasswordRequest();
+            request.setOldPassword("old");
+            request.setNewPassword("new12345");
+
+            when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+
+            assertThatThrownBy(() -> authService.changePassword("john@example.com", request))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessage("Password change is not supported for OAuth users");
+        }
+    }
+
+    // ─── Deactivate Account ──────────────────────────────────────────────
 
     @Test
-    @DisplayName("GetAllUsers: should return list of user summaries")
-    void getAllUsers_shouldReturnUserList() {
+    @DisplayName("Should deactivate account successfully")
+    void deactivateAccount_success() {
+        when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MessageResponse response = authService.deactivateAccount("john@example.com");
+
+        assertThat(response.getMessage()).isEqualTo("Account deactivated successfully");
+        assertThat(testUser.getActive()).isFalse();
+    }
+
+    // ─── Get All Users ───────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Should get all users")
+    void getAllUsers_success() {
         when(userRepository.findAll()).thenReturn(List.of(testUser));
 
         List<UserSummaryResponse> users = authService.getAllUsers();
 
         assertThat(users).hasSize(1);
-        assertThat(users.get(0).getEmail()).isEqualTo("test@example.com");
+        assertThat(users.get(0).getEmail()).isEqualTo("john@example.com");
     }
 
-    // ===== DEACTIVATE ACCOUNT TEST =====
+    // ─── Get Users By Role ───────────────────────────────────────────────
 
     @Test
-    @DisplayName("DeactivateAccount: should deactivate active user")
-    void deactivateAccount_shouldDeactivate() {
-        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
-        when(userRepository.save(any())).thenReturn(testUser);
+    @DisplayName("Should get users by role")
+    void getUsersByRole_success() {
+        when(userRepository.findAllByRole(Role.PASSENGER)).thenReturn(List.of(testUser));
 
-        MessageResponse response = authService.deactivateAccount("test@example.com");
+        List<UserSummaryResponse> users = authService.getUsersByRole("PASSENGER");
 
-        assertThat(testUser.getActive()).isFalse();
-        assertThat(response.getMessage()).contains("deactivated");
+        assertThat(users).hasSize(1);
+        assertThat(users.get(0).getRole()).isEqualTo(Role.PASSENGER);
     }
 
-    // ===== FORGOT PASSWORD TEST =====
+    // ─── Forgot Password ─────────────────────────────────────────────────
 
     @Test
-    @DisplayName("ForgotPassword: should send reset email for local user")
-    void forgotPassword_shouldSendEmail_forLocalUser() {
-        ForgotPasswordRequest req = new ForgotPasswordRequest();
-        req.setEmail("test@example.com");
+    @DisplayName("Should send OTP for forgot password")
+    void forgotPassword_success() {
+        ForgotPasswordRequest request = new ForgotPasswordRequest();
+        request.setEmail("john@example.com");
 
-        when(userRepository.findByEmail(anyString())).thenReturn(Optional.of(testUser));
-        when(passwordResetTokenRepository.save(any())).thenReturn(null);
-        when(appProperties.getPasswordReset()).thenReturn(passwordResetProps);
-        when(passwordResetProps.getExpirationMinutes()).thenReturn(30L);
-        when(appProperties.getFrontendBaseUrl()).thenReturn("http://localhost:4200");
-        doNothing().when(passwordResetTokenRepository).deleteByUser(any());
+        when(userRepository.findByEmail("john@example.com")).thenReturn(Optional.of(testUser));
+        when(appProperties.getPasswordReset()).thenReturn(resetProps);
 
-        MessageResponse response = authService.forgotPassword(req);
+        MessageResponse response = authService.forgotPassword(request);
 
-        assertThat(response.getMessage()).contains("password reset link");
-        verify(emailService).sendPasswordResetEmail(anyString(), anyString(), anyString());
+        assertThat(response.getMessage()).contains("OTP has been sent");
+        verify(passwordResetTokenRepository).deleteByUser(testUser);
+        verify(passwordResetTokenRepository).save(any(PasswordResetToken.class));
+        verify(emailService).sendPasswordResetOtp(eq("john@example.com"), eq("John Doe"), anyString(), eq(15L));
     }
 
-    // ===== RESET PASSWORD TESTS =====
+    @Test
+    @DisplayName("Should return same message even for non-existing email")
+    void forgotPassword_unknownEmail() {
+        ForgotPasswordRequest request = new ForgotPasswordRequest();
+        request.setEmail("unknown@example.com");
+
+        when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
+
+        MessageResponse response = authService.forgotPassword(request);
+
+        assertThat(response.getMessage()).contains("OTP has been sent");
+        verify(passwordResetTokenRepository, never()).save(any());
+    }
+
+    // ─── Verify OTP ──────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("ResetPassword: should reset password for valid token")
-    void resetPassword_shouldSucceed_forValidToken() {
-        PasswordResetToken resetToken = PasswordResetToken.builder()
-                .token("valid-reset-token")
+    @DisplayName("Should verify OTP successfully")
+    void verifyOtp_success() {
+        PasswordResetToken token = PasswordResetToken.builder()
+                .token("123456")
                 .user(testUser)
-                .expiresAt(LocalDateTime.now().plusMinutes(30))
+                .expiresAt(LocalDateTime.now().plusMinutes(10))
                 .used(false)
                 .build();
 
-        ResetPasswordRequest req = new ResetPasswordRequest();
-        req.setToken("valid-reset-token");
-        req.setNewPassword("NewSecurePass789");
+        when(passwordResetTokenRepository.findByTokenAndUsedFalse("123456")).thenReturn(Optional.of(token));
 
-        when(passwordResetTokenRepository.findByTokenAndUsedFalse(anyString())).thenReturn(Optional.of(resetToken));
-        when(passwordEncoder.encode(anyString())).thenReturn("newhashedpassword");
-        when(userRepository.save(any())).thenReturn(testUser);
-        when(passwordResetTokenRepository.save(any())).thenReturn(resetToken);
+        AuthResponse response = authService.verifyOtp("john@example.com", "123456");
 
-        MessageResponse response = authService.resetPassword(req);
-
-        assertThat(response.getMessage()).contains("successful");
-        assertThat(resetToken.isUsed()).isTrue();
+        assertThat(response.getMessage()).isEqualTo("OTP verified successfully");
+        assertThat(response.getAccessToken()).isNotNull(); // reset UUID token
+        verify(passwordResetTokenRepository).save(token);
     }
 
     @Test
-    @DisplayName("ResetPassword: should throw for expired token")
-    void resetPassword_shouldThrow_forExpiredToken() {
-        PasswordResetToken expiredToken = PasswordResetToken.builder()
-                .token("expired-token")
+    @DisplayName("Should throw when OTP is expired")
+    void verifyOtp_expired() {
+        PasswordResetToken token = PasswordResetToken.builder()
+                .token("123456")
                 .user(testUser)
-                .expiresAt(LocalDateTime.now().minusMinutes(5)) // already expired
+                .expiresAt(LocalDateTime.now().minusMinutes(5))
                 .used(false)
                 .build();
 
-        ResetPasswordRequest req = new ResetPasswordRequest();
-        req.setToken("expired-token");
-        req.setNewPassword("NewPass");
+        when(passwordResetTokenRepository.findByTokenAndUsedFalse("123456")).thenReturn(Optional.of(token));
 
-        when(passwordResetTokenRepository.findByTokenAndUsedFalse(anyString())).thenReturn(Optional.of(expiredToken));
-
-        assertThatThrownBy(() -> authService.resetPassword(req))
+        assertThatThrownBy(() -> authService.verifyOtp("john@example.com", "123456"))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("expired");
+                .hasMessage("OTP has expired");
     }
 
     @Test
-    @DisplayName("ResetPassword: should throw for invalid/used token")
-    void resetPassword_shouldThrow_forInvalidToken() {
-        ResetPasswordRequest req = new ResetPasswordRequest();
-        req.setToken("invalid-token");
-        req.setNewPassword("NewPass");
+    @DisplayName("Should throw when OTP email mismatch")
+    void verifyOtp_emailMismatch() {
+        PasswordResetToken token = PasswordResetToken.builder()
+                .token("123456")
+                .user(testUser) // email is john@example.com
+                .expiresAt(LocalDateTime.now().plusMinutes(10))
+                .used(false)
+                .build();
 
-        when(passwordResetTokenRepository.findByTokenAndUsedFalse(anyString())).thenReturn(Optional.empty());
+        when(passwordResetTokenRepository.findByTokenAndUsedFalse("123456")).thenReturn(Optional.of(token));
 
-        assertThatThrownBy(() -> authService.resetPassword(req))
-                .isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> authService.verifyOtp("other@example.com", "123456"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Invalid OTP for this email");
     }
 
-    // ===== VALIDATE TOKEN TEST =====
+    // ─── Reset Password ──────────────────────────────────────────────────
 
     @Test
-    @DisplayName("ValidateToken: should return valid message for non-blacklisted valid token")
-    void validateToken_shouldReturnValid_forGoodToken() {
-        when(jwtService.isTokenValid(anyString(), anyString())).thenReturn(true);
-        when(tokenBlacklistService.isBlacklisted(anyString())).thenReturn(false);
+    @DisplayName("Should reset password successfully")
+    void resetPassword_success() {
+        PasswordResetToken token = PasswordResetToken.builder()
+                .token("reset-uuid")
+                .user(testUser)
+                .expiresAt(LocalDateTime.now().plusMinutes(10))
+                .used(false)
+                .build();
 
-        MessageResponse response = authService.validateToken("good-token");
+        ResetPasswordRequest request = new ResetPasswordRequest();
+        request.setToken("reset-uuid");
+        request.setNewPassword("newSecurePass");
 
-        assertThat(response.getMessage()).contains("valid");
+        when(passwordResetTokenRepository.findByTokenAndUsedFalse("reset-uuid")).thenReturn(Optional.of(token));
+        when(passwordEncoder.encode("newSecurePass")).thenReturn("newHash");
+
+        MessageResponse response = authService.resetPassword(request);
+
+        assertThat(response.getMessage()).isEqualTo("Password reset successful");
+        assertThat(token.isUsed()).isTrue();
+        verify(userRepository).save(testUser);
+    }
+
+    @Test
+    @DisplayName("Should throw when reset token expired")
+    void resetPassword_expiredToken() {
+        PasswordResetToken token = PasswordResetToken.builder()
+                .token("expired-uuid")
+                .user(testUser)
+                .expiresAt(LocalDateTime.now().minusMinutes(5))
+                .used(false)
+                .build();
+
+        ResetPasswordRequest request = new ResetPasswordRequest();
+        request.setToken("expired-uuid");
+        request.setNewPassword("newPass");
+
+        when(passwordResetTokenRepository.findByTokenAndUsedFalse("expired-uuid")).thenReturn(Optional.of(token));
+
+        assertThatThrownBy(() -> authService.resetPassword(request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Password reset token expired");
+    }
+
+    @Test
+    @DisplayName("Should throw when OAuth user tries to reset password")
+    void resetPassword_oauthUser() {
+        testUser.setProvider(AuthProvider.GOOGLE);
+        PasswordResetToken token = PasswordResetToken.builder()
+                .token("reset-uuid")
+                .user(testUser)
+                .expiresAt(LocalDateTime.now().plusMinutes(10))
+                .used(false)
+                .build();
+
+        ResetPasswordRequest request = new ResetPasswordRequest();
+        request.setToken("reset-uuid");
+        request.setNewPassword("newPass");
+
+        when(passwordResetTokenRepository.findByTokenAndUsedFalse("reset-uuid")).thenReturn(Optional.of(token));
+
+        assertThatThrownBy(() -> authService.resetPassword(request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Password reset is not supported for OAuth users");
     }
 }

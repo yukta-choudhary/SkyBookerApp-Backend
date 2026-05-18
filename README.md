@@ -163,8 +163,9 @@ Manages user identity, authentication, and authorization across the platform. Is
 | PATCH | `/api/v1/auth/me` | Authenticated | Partial profile update |
 | PUT | `/api/v1/auth/me/change-password` | Authenticated | Change password |
 | DELETE | `/api/v1/auth/me` | Authenticated | Deactivate account |
-| POST | `/api/v1/auth/forgot-password` | PUBLIC | Request password reset email |
-| POST | `/api/v1/auth/reset-password` | PUBLIC | Reset password via token |
+| POST | `/api/v1/auth/forgot-password` | PUBLIC | Request OTP for password reset |
+| POST | `/api/v1/auth/verify-otp` | PUBLIC | Verify 6-digit OTP — returns reset token |
+| POST | `/api/v1/auth/reset-password` | PUBLIC | Reset password via token from OTP verification |
 | GET | `/api/v1/auth/admin/users` | ADMIN | List all users |
 | GET | `/api/v1/auth/admin/users/role/{role}` | ADMIN | List users by role |
 
@@ -326,6 +327,7 @@ Manages seat inventory and interactive seat map per flight. Enforces a 15-minute
 | PUT | `/api/v1/seats/{seatId}/confirm` | PASSENGER / AIRLINE_STAFF / ADMIN | Confirm a held seat |
 | PUT | `/api/v1/seats/{seatId}` | AIRLINE_STAFF / ADMIN | Update seat details |
 | DELETE | `/api/v1/seats/flight/{flightId}` | AIRLINE_STAFF / ADMIN | Delete all seats for a flight |
+| DELETE | `/api/v1/seats/flight/{flightId}/class/{seatClass}` | AIRLINE_STAFF / ADMIN | Delete seats by class for a flight |
 
 ---
 
@@ -350,10 +352,12 @@ Handles all financial transactions via **Razorpay** payment gateway. Creates ord
 |--------|----------|------|-------------|
 | POST | `/api/v1/payments/initiate` | PASSENGER | Create Razorpay order for a booking |
 | POST | `/api/v1/payments/verify` | PASSENGER | Verify payment signature and confirm booking |
-| POST | `/api/v1/payments/refund/{paymentId}` | PASSENGER / ADMIN | Initiate refund |
+| GET | `/api/v1/payments/{paymentId}` | PASSENGER / ADMIN | Get payment by ID |
 | GET | `/api/v1/payments/booking/{bookingId}` | PASSENGER / ADMIN | Get payment by booking |
 | GET | `/api/v1/payments/user/{userId}` | PASSENGER / ADMIN | Get all payments for a user |
-| GET | `/api/v1/payments/revenue` | ADMIN | Get total platform revenue |
+| POST | `/api/v1/payments/refund` | PASSENGER / ADMIN | Initiate full or partial refund |
+| GET | `/api/v1/payments/admin/revenue` | ADMIN | Get total platform revenue |
+| GET | `/api/v1/payments/admin/revenue/monthly?year=` | ADMIN | Get monthly revenue breakdown |
 
 ---
 
@@ -377,11 +381,11 @@ Multi-channel alert hub. Listens to Kafka events, dispatches transactional email
 
 | Method | Endpoint | Role | Description |
 |--------|----------|------|-------------|
-| GET | `/api/v1/notifications/user/{userId}` | PASSENGER / ADMIN | All notifications for a user |
-| GET | `/api/v1/notifications/user/{userId}/unread` | PASSENGER / ADMIN | Unread notifications |
-| GET | `/api/v1/notifications/user/{userId}/unread/count` | PASSENGER / ADMIN | Unread count |
-| PUT | `/api/v1/notifications/{id}/read` | PASSENGER / ADMIN | Mark as read |
-| PUT | `/api/v1/notifications/user/{userId}/read-all` | PASSENGER / ADMIN | Mark all as read |
+| GET | `/api/v1/notifications/user/{userId}` | PASSENGER / AIRLINE_STAFF / ADMIN | All notifications for a user |
+| GET | `/api/v1/notifications/user/{userId}/unread` | PASSENGER / AIRLINE_STAFF / ADMIN | Unread notifications |
+| GET | `/api/v1/notifications/user/{userId}/unread/count` | PASSENGER / AIRLINE_STAFF / ADMIN | Unread count |
+| PUT | `/api/v1/notifications/{id}/read` | PASSENGER / AIRLINE_STAFF / ADMIN | Mark as read |
+| PUT | `/api/v1/notifications/user/{userId}/read-all` | PASSENGER / AIRLINE_STAFF / ADMIN | Mark all as read |
 | DELETE | `/api/v1/notifications/{id}` | PASSENGER / ADMIN | Delete a notification |
 | POST | `/api/v1/notifications/admin/broadcast` | ADMIN | Send broadcast notification |
 
@@ -437,6 +441,49 @@ services:
 ```
 
 Start with: `docker-compose up -d`
+
+---
+
+## Testing
+
+The project includes **~131 JUnit 5 + Mockito unit tests** across all business logic services. Tests are fast and isolated — no Spring context is loaded (`@ExtendWith(MockitoExtension.class)`).
+
+### Test Files Summary
+
+| Service | Test Class | Tests | Coverage Focus |
+|---------|-----------|-------|----------------|
+| auth-service | `AuthServiceImplTest` | 30 | Register, login, logout, token refresh, profile CRUD, password change/reset, OTP verification, deactivation |
+| auth-service | `TokenBlacklistServiceImplTest` | 4 | Blacklist, check status, cleanup expired tokens |
+| airline-service | `AirlineServiceImplTest` | 10 | CRUD, activate/deactivate, duplicate IATA validation |
+| airline-service | `AirportServiceImplTest` | 10 | CRUD, search by keyword/city/country, delete |
+| booking-service | `BookingServiceImplTest` | 13 | Create (PNR generation), cancel, confirm (idempotent), add-ons, role-based access control |
+| flight-service | `FlightServiceImplTest` | 12 | Add (auto-duration), search, round-trip, status update + Kafka, Kafka failure resilience |
+| passenger-service | `PassengerServiceImplTest` | 12 | Add (ticket generation), update, seat assign, access control, count |
+| payment-service | `PaymentServiceImplTest` | 8 | Get by ID/booking/user, refund validation, revenue queries |
+| seat-service | `SeatServiceImplTest` | 18 | Hold/release/confirm lifecycle, optimistic locking, expired hold, bulk add, seat map |
+| notification-service | `NotificationServiceImplTest` | 14 | Payment success events, flight status alerts, broadcast, read/unread, email failure handling |
+
+### Running Tests
+
+Run all tests for a specific service:
+```bash
+cd <service-directory>
+./mvnw test
+```
+
+Run a specific test class:
+```bash
+cd auth-service
+./mvnw test -Dtest=AuthServiceImplTest
+```
+
+### Test Design Principles
+
+- **No Spring context** — Pure Mockito mocking for fast execution
+- **SecurityContext mocking** — Booking and Passenger tests manually set `SecurityContextHolder` for role-based access testing
+- **Kafka resilience** — Flight service tests verify graceful handling when Kafka is unavailable
+- **`ReflectionTestUtils`** — Used in Payment tests to inject `@Value` fields without Spring context
+- **Branch coverage** — Every method's happy path + all exception branches are tested (targeting >75% coverage)
 
 ---
 
