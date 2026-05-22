@@ -5,11 +5,6 @@ spring:
   application:
     name: api-gateway
 
-  data:
-    redis:
-      host: localhost
-      port: 6379
-
   cloud:
     gateway:
       # IMPORTANT: fixes browser preflight (OPTIONS) issues through the gateway
@@ -51,13 +46,6 @@ spring:
           uri: ${AUTH_SERVICE_URI:lb://auth-service}
           predicates:
             - Path=/api/v1/auth/**
-          filters:
-            - name: RequestRateLimiter
-              args:
-                redis-rate-limiter.replenishRate: 10
-                redis-rate-limiter.burstCapacity: 20
-                redis-rate-limiter.requestedTokens: 1
-                key-resolver: "#{@ipKeyResolver}"
 
         - id: airline-service
           uri: ${AIRLINE_SERVICE_URI:lb://airline-service}

@@ -62,9 +62,8 @@ The backend is architected as **10 independently deployable Spring Boot microser
 
 - **Java 17+**
 - **MySQL 8.x** — running locally on port `3306`
-- **Redis 7.x** — required for token blacklist, OTP storage, caching, and rate limiting
 - **Apache Kafka** — required for event-driven notifications (optional for basic booking flow)
-- **Docker** — recommended for running Kafka/Zookeeper/Redis (see below)
+- **Docker** — recommended for running Kafka/Zookeeper (see below)
 
 ---
 
@@ -80,11 +79,7 @@ Ensure MySQL is running on `localhost:3306`. All databases are auto-created via 
 docker-compose up -d
 ```
 
-This starts:
-- **Zookeeper** (port `2181`) and **Kafka** (port `9092`) — event streaming
-- **Redis** (port `6379`) — in-memory cache, token store, and rate limiting
-
-Kafka is required for:
+This starts **Zookeeper** (port `2181`) and **Kafka** (port `9092`) using Confluent images. Kafka is required for:
 - `payment-success` topic — triggers booking confirmation emails
 - `flight-status-changed` topic — triggers flight delay/cancellation alerts
 
@@ -135,61 +130,6 @@ The payment service uses **Razorpay** for processing payments. The following **T
 
 ---
 
-## Redis Integration
-
-Redis (`localhost:6379`) is used across multiple microservices as an in-memory data store. It is started automatically via `docker-compose up -d`.
-
-### Redis Usage by Service
-
-| Service | Redis Purpose | Key Pattern | TTL |
-|---------|--------------|-------------|-----|
-| **auth-service** | JWT token blacklist | `blacklist:{token}` | Matches JWT remaining expiry |
-| **auth-service** | OTP storage for password reset | `otp:{email}` | 30 min (configurable) |
-| **auth-service** | Reset token storage | `reset:{uuid}` | 30 min (configurable) |
-| **flight-service** | Flight search results cache | `flightSearch::{key}` | 5 min |
-| **seat-service** | Seat hold TTL tracking | `seat-hold:{seatId}` | 15 min |
-| **notification-service** | Unread notification counter | `unread:{userId}` | No expiry (managed by app) |
-| **api-gateway** | Rate limiting (auth endpoints) | `request_rate_limiter.{...}` | Sliding window |
-
-### Demonstrating Redis (Redis CLI)
-
-Connect to the Redis container:
-```bash
-docker exec -it skybooker-redis redis-cli
-```
-
-Useful commands for presentation:
-```bash
-# View all stored keys
-KEYS *
-
-# After logout — see blacklisted JWT token
-KEYS blacklist:*
-TTL blacklist:<token>
-
-# After forgot-password — see OTP
-GET otp:user@test.com
-TTL otp:user@test.com
-
-# After holding a seat — see TTL countdown
-KEYS seat-hold:*
-TTL seat-hold:<seatId>
-
-# Notification unread count
-GET unread:<userId>
-
-# Flight search cache
-KEYS flightSearch*
-
-# Rate limiter counters
-KEYS request_rate_limiter*
-
-# Live stream of all Redis commands in real-time
-MONITOR
-```
-
----
-
 ## Auth Service
 
 Manages user identity, authentication, and authorization across the platform. Issues JWT tokens on login, maintains a token blacklist for logout, supports password reset via email.
@@ -223,9 +163,8 @@ Manages user identity, authentication, and authorization across the platform. Is
 | PATCH | `/api/v1/auth/me` | Authenticated | Partial profile update |
 | PUT | `/api/v1/auth/me/change-password` | Authenticated | Change password |
 | DELETE | `/api/v1/auth/me` | Authenticated | Deactivate account |
-| POST | `/api/v1/auth/forgot-password` | PUBLIC | Request OTP for password reset |
-| POST | `/api/v1/auth/verify-otp` | PUBLIC | Verify 6-digit OTP — returns reset token |
-| POST | `/api/v1/auth/reset-password` | PUBLIC | Reset password via token from OTP verification |
+| POST | `/api/v1/auth/forgot-password` | PUBLIC | Request password reset email |
+| POST | `/api/v1/auth/reset-password` | PUBLIC | Reset password via token |
 | GET | `/api/v1/auth/admin/users` | ADMIN | List all users |
 | GET | `/api/v1/auth/admin/users/role/{role}` | ADMIN | List users by role |
 
@@ -387,7 +326,6 @@ Manages seat inventory and interactive seat map per flight. Enforces a 15-minute
 | PUT | `/api/v1/seats/{seatId}/confirm` | PASSENGER / AIRLINE_STAFF / ADMIN | Confirm a held seat |
 | PUT | `/api/v1/seats/{seatId}` | AIRLINE_STAFF / ADMIN | Update seat details |
 | DELETE | `/api/v1/seats/flight/{flightId}` | AIRLINE_STAFF / ADMIN | Delete all seats for a flight |
-| DELETE | `/api/v1/seats/flight/{flightId}/class/{seatClass}` | AIRLINE_STAFF / ADMIN | Delete seats by class for a flight |
 
 ---
 
@@ -412,12 +350,10 @@ Handles all financial transactions via **Razorpay** payment gateway. Creates ord
 |--------|----------|------|-------------|
 | POST | `/api/v1/payments/initiate` | PASSENGER | Create Razorpay order for a booking |
 | POST | `/api/v1/payments/verify` | PASSENGER | Verify payment signature and confirm booking |
-| GET | `/api/v1/payments/{paymentId}` | PASSENGER / ADMIN | Get payment by ID |
+| POST | `/api/v1/payments/refund/{paymentId}` | PASSENGER / ADMIN | Initiate refund |
 | GET | `/api/v1/payments/booking/{bookingId}` | PASSENGER / ADMIN | Get payment by booking |
 | GET | `/api/v1/payments/user/{userId}` | PASSENGER / ADMIN | Get all payments for a user |
-| POST | `/api/v1/payments/refund` | PASSENGER / ADMIN | Initiate full or partial refund |
-| GET | `/api/v1/payments/admin/revenue` | ADMIN | Get total platform revenue |
-| GET | `/api/v1/payments/admin/revenue/monthly?year=` | ADMIN | Get monthly revenue breakdown |
+| GET | `/api/v1/payments/revenue` | ADMIN | Get total platform revenue |
 
 ---
 
@@ -441,11 +377,11 @@ Multi-channel alert hub. Listens to Kafka events, dispatches transactional email
 
 | Method | Endpoint | Role | Description |
 |--------|----------|------|-------------|
-| GET | `/api/v1/notifications/user/{userId}` | PASSENGER / AIRLINE_STAFF / ADMIN | All notifications for a user |
-| GET | `/api/v1/notifications/user/{userId}/unread` | PASSENGER / AIRLINE_STAFF / ADMIN | Unread notifications |
-| GET | `/api/v1/notifications/user/{userId}/unread/count` | PASSENGER / AIRLINE_STAFF / ADMIN | Unread count |
-| PUT | `/api/v1/notifications/{id}/read` | PASSENGER / AIRLINE_STAFF / ADMIN | Mark as read |
-| PUT | `/api/v1/notifications/user/{userId}/read-all` | PASSENGER / AIRLINE_STAFF / ADMIN | Mark all as read |
+| GET | `/api/v1/notifications/user/{userId}` | PASSENGER / ADMIN | All notifications for a user |
+| GET | `/api/v1/notifications/user/{userId}/unread` | PASSENGER / ADMIN | Unread notifications |
+| GET | `/api/v1/notifications/user/{userId}/unread/count` | PASSENGER / ADMIN | Unread count |
+| PUT | `/api/v1/notifications/{id}/read` | PASSENGER / ADMIN | Mark as read |
+| PUT | `/api/v1/notifications/user/{userId}/read-all` | PASSENGER / ADMIN | Mark all as read |
 | DELETE | `/api/v1/notifications/{id}` | PASSENGER / ADMIN | Delete a notification |
 | POST | `/api/v1/notifications/admin/broadcast` | ADMIN | Send broadcast notification |
 
@@ -501,49 +437,6 @@ services:
 ```
 
 Start with: `docker-compose up -d`
-
----
-
-## Testing
-
-The project includes **~131 JUnit 5 + Mockito unit tests** across all business logic services. Tests are fast and isolated — no Spring context is loaded (`@ExtendWith(MockitoExtension.class)`).
-
-### Test Files Summary
-
-| Service | Test Class | Tests | Coverage Focus |
-|---------|-----------|-------|----------------|
-| auth-service | `AuthServiceImplTest` | 30 | Register, login, logout, token refresh, profile CRUD, password change/reset, OTP verification, deactivation |
-| auth-service | `TokenBlacklistServiceImplTest` | 4 | Blacklist, check status, cleanup expired tokens |
-| airline-service | `AirlineServiceImplTest` | 10 | CRUD, activate/deactivate, duplicate IATA validation |
-| airline-service | `AirportServiceImplTest` | 10 | CRUD, search by keyword/city/country, delete |
-| booking-service | `BookingServiceImplTest` | 13 | Create (PNR generation), cancel, confirm (idempotent), add-ons, role-based access control |
-| flight-service | `FlightServiceImplTest` | 12 | Add (auto-duration), search, round-trip, status update + Kafka, Kafka failure resilience |
-| passenger-service | `PassengerServiceImplTest` | 12 | Add (ticket generation), update, seat assign, access control, count |
-| payment-service | `PaymentServiceImplTest` | 8 | Get by ID/booking/user, refund validation, revenue queries |
-| seat-service | `SeatServiceImplTest` | 18 | Hold/release/confirm lifecycle, optimistic locking, expired hold, bulk add, seat map |
-| notification-service | `NotificationServiceImplTest` | 14 | Payment success events, flight status alerts, broadcast, read/unread, email failure handling |
-
-### Running Tests
-
-Run all tests for a specific service:
-```bash
-cd <service-directory>
-./mvnw test
-```
-
-Run a specific test class:
-```bash
-cd auth-service
-./mvnw test -Dtest=AuthServiceImplTest
-```
-
-### Test Design Principles
-
-- **No Spring context** — Pure Mockito mocking for fast execution
-- **SecurityContext mocking** — Booking and Passenger tests manually set `SecurityContextHolder` for role-based access testing
-- **Kafka resilience** — Flight service tests verify graceful handling when Kafka is unavailable
-- **`ReflectionTestUtils`** — Used in Payment tests to inject `@Value` fields without Spring context
-- **Branch coverage** — Every method's happy path + all exception branches are tested (targeting >75% coverage)
 
 ---
 

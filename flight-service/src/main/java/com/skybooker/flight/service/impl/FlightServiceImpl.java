@@ -8,8 +8,6 @@ import com.skybooker.flight.repository.FlightRepository;
 import com.skybooker.flight.service.FlightService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,7 +28,6 @@ public class FlightServiceImpl implements FlightService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Override
-    @CacheEvict(value = "flightSearch", allEntries = true)
     public Flight addFlight(Flight flight) {
         flight.setAvailableSeats(flight.getTotalSeats());
         flight.setDurationMinutes(calculateDurationMinutes(flight.getDepartureTime(), flight.getArrivalTime()));
@@ -55,7 +52,6 @@ public class FlightServiceImpl implements FlightService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "flightSearch", key = "#origin + ':' + #destination + ':' + #date")
     public List<Flight> searchFlights(String origin, String destination, LocalDate date) {
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.atTime(23, 59, 59);
@@ -66,7 +62,6 @@ public class FlightServiceImpl implements FlightService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "flightSearch", key = "'RT:' + #origin + ':' + #destination + ':' + #departureDate + ':' + #returnDate")
     public RoundTripResponse searchRoundTrip(String origin, String destination,
                                              LocalDate departureDate, LocalDate returnDate) {
         List<Flight> outbound = searchFlights(origin, destination, departureDate);
@@ -78,7 +73,6 @@ public class FlightServiceImpl implements FlightService {
     }
 
     @Override
-    @CacheEvict(value = "flightSearch", allEntries = true)
     public Flight updateFlight(UUID flightId, Flight updated) {
         Flight flight = getFlightById(flightId);
         flight.setFlightNumber(updated.getFlightNumber());
@@ -95,7 +89,6 @@ public class FlightServiceImpl implements FlightService {
     }
 
     @Override
-    @CacheEvict(value = "flightSearch", allEntries = true)
     public Flight updateStatus(UUID flightId, String status) {
         Flight flight = getFlightById(flightId);
         FlightStatus newStatus = FlightStatus.valueOf(status.toUpperCase());
@@ -125,7 +118,6 @@ public class FlightServiceImpl implements FlightService {
     }
 
     @Override
-    @CacheEvict(value = "flightSearch", allEntries = true)
     public void deleteFlight(UUID flightId) {
         flightRepository.deleteById(flightId);
     }

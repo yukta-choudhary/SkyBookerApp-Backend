@@ -1,6 +1,5 @@
 package com.skybooker.flight;
 
-import com.skybooker.flight.dto.RoundTripResponse;
 import com.skybooker.flight.entity.Flight;
 import com.skybooker.flight.enums.FlightStatus;
 import com.skybooker.flight.repository.FlightRepository;
@@ -24,18 +23,22 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+/**
+ * Unit tests for FlightServiceImpl.
+ * Covers flight CRUD, search, status updates, and Kafka publishing.
+ */
 @ExtendWith(MockitoExtension.class)
+@DisplayName("FlightServiceImpl Unit Tests")
 class FlightServiceImplTest {
 
     @Mock private FlightRepository flightRepository;
     @Mock private KafkaTemplate<String, Object> kafkaTemplate;
 
-    @InjectMocks
-    private FlightServiceImpl flightService;
+    @InjectMocks private FlightServiceImpl flightService;
 
-    private Flight testFlight;
     private UUID flightId;
     private UUID airlineId;
+    private Flight testFlight;
 
     @BeforeEach
     void setUp() {
@@ -48,163 +51,171 @@ class FlightServiceImplTest {
                 .airlineId(airlineId)
                 .originAirportCode("DEL")
                 .destinationAirportCode("BOM")
-                .departureTime(LocalDateTime.of(2026, 6, 1, 10, 0))
-                .arrivalTime(LocalDateTime.of(2026, 6, 1, 12, 30))
-                .totalSeats(180)
-                .availableSeats(180)
-                .basePrice(5000.0)
+                .departureTime(LocalDateTime.now().plusDays(1))
+                .arrivalTime(LocalDateTime.now().plusDays(1).plusHours(2))
+                .durationMinutes(120)
                 .status(FlightStatus.ON_TIME)
+                .totalSeats(180)
+                .availableSeats(150)
+                .basePrice(4500.0)
                 .build();
     }
 
+    // ===== ADD FLIGHT TESTS =====
+
     @Test
-    @DisplayName("Should add flight and set available seats and duration")
-    void addFlight_success() {
-        Flight newFlight = Flight.builder()
-                .flightNumber("SK102")
-                .totalSeats(200)
-                .departureTime(LocalDateTime.of(2026, 6, 1, 14, 0))
-                .arrivalTime(LocalDateTime.of(2026, 6, 1, 16, 0))
-                .build();
+    @DisplayName("AddFlight: should save flight with ON_TIME status when status is null")
+    void addFlight_shouldSetDefaultStatus_whenStatusNull() {
+        testFlight.setStatus(null);
+        when(flightRepository.save(any(Flight.class))).thenAnswer(inv -> {
+            Flight f = inv.getArgument(0);
+            assertThat(f.getStatus()).isEqualTo(FlightStatus.ON_TIME);
+            return f;
+        });
 
-        when(flightRepository.save(any(Flight.class))).thenAnswer(inv -> inv.getArgument(0));
+        flightService.addFlight(testFlight);
 
-        Flight result = flightService.addFlight(newFlight);
-
-        assertThat(result.getAvailableSeats()).isEqualTo(200);
-        assertThat(result.getDurationMinutes()).isEqualTo(120);
-        assertThat(result.getStatus()).isEqualTo(FlightStatus.ON_TIME);
+        verify(flightRepository).save(any(Flight.class));
     }
 
     @Test
-    @DisplayName("Should add flight with explicit status")
-    void addFlight_withExplicitStatus() {
-        Flight newFlight = Flight.builder()
-                .flightNumber("SK103")
-                .totalSeats(100)
-                .departureTime(LocalDateTime.of(2026, 6, 1, 14, 0))
-                .arrivalTime(LocalDateTime.of(2026, 6, 1, 16, 0))
-                .status(FlightStatus.DELAYED)
-                .build();
+    @DisplayName("AddFlight: should set availableSeats to totalSeats on creation")
+    void addFlight_shouldSetAvailableSeats_toTotalSeats() {
+        testFlight.setAvailableSeats(null);
+        testFlight.setTotalSeats(200);
+        when(flightRepository.save(any(Flight.class))).thenReturn(testFlight);
 
-        when(flightRepository.save(any(Flight.class))).thenAnswer(inv -> inv.getArgument(0));
+        Flight saved = flightService.addFlight(testFlight);
 
-        Flight result = flightService.addFlight(newFlight);
-
-        assertThat(result.getStatus()).isEqualTo(FlightStatus.DELAYED);
+        // Should set availableSeats = totalSeats before saving
+        assertThat(testFlight.getAvailableSeats()).isEqualTo(200);
     }
 
-    @Test
-    @DisplayName("Should throw when arrival is before departure")
-    void addFlight_invalidTimes() {
-        Flight invalidFlight = Flight.builder()
-                .totalSeats(100)
-                .departureTime(LocalDateTime.of(2026, 6, 1, 16, 0))
-                .arrivalTime(LocalDateTime.of(2026, 6, 1, 14, 0))
-                .build();
-
-        assertThatThrownBy(() -> flightService.addFlight(invalidFlight))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Arrival time must be after departure time");
-    }
+    // ===== GET FLIGHT TESTS =====
 
     @Test
-    @DisplayName("Should get flight by ID")
-    void getFlightById_success() {
+    @DisplayName("GetFlightById: should return flight for valid ID")
+    void getFlightById_shouldReturnFlight() {
         when(flightRepository.findById(flightId)).thenReturn(Optional.of(testFlight));
 
         Flight result = flightService.getFlightById(flightId);
 
         assertThat(result.getFlightNumber()).isEqualTo("SK101");
+        assertThat(result.getOriginAirportCode()).isEqualTo("DEL");
     }
 
     @Test
-    @DisplayName("Should throw when flight not found")
-    void getFlightById_notFound() {
-        UUID unknownId = UUID.randomUUID();
-        when(flightRepository.findById(unknownId)).thenReturn(Optional.empty());
+    @DisplayName("GetFlightById: should throw RuntimeException for unknown ID")
+    void getFlightById_shouldThrow_whenNotFound() {
+        when(flightRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> flightService.getFlightById(unknownId))
+        assertThatThrownBy(() -> flightService.getFlightById(UUID.randomUUID()))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Flight not found");
     }
 
+    // ===== GET FLIGHTS BY AIRLINE =====
+
     @Test
-    @DisplayName("Should get flights by airline ID")
-    void getFlightsByAirline_success() {
+    @DisplayName("GetFlightsByAirline: should return list of flights for airline")
+    void getFlightsByAirline_shouldReturnList() {
         when(flightRepository.findByAirlineId(airlineId)).thenReturn(List.of(testFlight));
 
-        List<Flight> result = flightService.getFlightsByAirline(airlineId);
+        List<Flight> flights = flightService.getFlightsByAirline(airlineId);
 
-        assertThat(result).hasSize(1);
+        assertThat(flights).hasSize(1);
+        assertThat(flights.get(0).getAirlineId()).isEqualTo(airlineId);
     }
 
     @Test
-    @DisplayName("Should search flights by origin, destination and date")
-    void searchFlights_success() {
-        LocalDate date = LocalDate.of(2026, 6, 1);
+    @DisplayName("GetFlightsByAirline: should return empty list when no flights")
+    void getFlightsByAirline_shouldReturnEmpty_whenNoneExist() {
+        when(flightRepository.findByAirlineId(airlineId)).thenReturn(List.of());
+
+        List<Flight> flights = flightService.getFlightsByAirline(airlineId);
+
+        assertThat(flights).isEmpty();
+    }
+
+    // ===== SEARCH FLIGHTS =====
+
+    @Test
+    @DisplayName("SearchFlights: should return matching flights for origin-dest-date")
+    void searchFlights_shouldReturnFlights() {
+        LocalDate date = LocalDate.now().plusDays(1);
         when(flightRepository.findByOriginAirportCodeAndDestinationAirportCodeAndDepartureTimeBetween(
-                eq("DEL"), eq("BOM"), any(), any())).thenReturn(List.of(testFlight));
+                eq("DEL"), eq("BOM"), any(), any()))
+                .thenReturn(List.of(testFlight));
 
-        List<Flight> result = flightService.searchFlights("DEL", "BOM", date);
+        List<Flight> results = flightService.searchFlights("del", "bom", date);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getOriginAirportCode()).isEqualTo("DEL");
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getFlightNumber()).isEqualTo("SK101");
     }
 
     @Test
-    @DisplayName("Should search round-trip flights")
-    void searchRoundTrip_success() {
-        LocalDate depDate = LocalDate.of(2026, 6, 1);
-        LocalDate retDate = LocalDate.of(2026, 6, 5);
+    @DisplayName("SearchFlights: should convert origin/dest to uppercase before querying")
+    void searchFlights_shouldUppercaseAirportCodes() {
+        LocalDate date = LocalDate.now().plusDays(1);
+        when(flightRepository.findByOriginAirportCodeAndDestinationAirportCodeAndDepartureTimeBetween(
+                eq("DEL"), eq("BOM"), any(), any()))
+                .thenReturn(List.of());
 
+        flightService.searchFlights("del", "bom", date);
+
+        verify(flightRepository).findByOriginAirportCodeAndDestinationAirportCodeAndDepartureTimeBetween(
+                eq("DEL"), eq("BOM"), any(), any());
+    }
+
+    @Test
+    @DisplayName("SearchFlights: should return empty list when no flights on that date")
+    void searchFlights_shouldReturnEmpty_whenNoFlights() {
+        when(flightRepository.findByOriginAirportCodeAndDestinationAirportCodeAndDepartureTimeBetween(
+                anyString(), anyString(), any(), any()))
+                .thenReturn(List.of());
+
+        List<Flight> results = flightService.searchFlights("DEL", "BOM", LocalDate.now().plusDays(3));
+
+        assertThat(results).isEmpty();
+    }
+
+    // ===== ROUND TRIP SEARCH =====
+
+    @Test
+    @DisplayName("SearchRoundTrip: should return outbound and return flights")
+    void searchRoundTrip_shouldReturnBothLegs() {
         Flight returnFlight = Flight.builder()
-                .flightNumber("SK102")
+                .flightId(UUID.randomUUID())
+                .flightNumber("SK201")
+                .airlineId(airlineId)
                 .originAirportCode("BOM")
                 .destinationAirportCode("DEL")
+                .status(FlightStatus.ON_TIME)
                 .build();
 
         when(flightRepository.findByOriginAirportCodeAndDestinationAirportCodeAndDepartureTimeBetween(
-                eq("DEL"), eq("BOM"), any(), any())).thenReturn(List.of(testFlight));
+                eq("DEL"), eq("BOM"), any(), any()))
+                .thenReturn(List.of(testFlight));
         when(flightRepository.findByOriginAirportCodeAndDestinationAirportCodeAndDepartureTimeBetween(
-                eq("BOM"), eq("DEL"), any(), any())).thenReturn(List.of(returnFlight));
+                eq("BOM"), eq("DEL"), any(), any()))
+                .thenReturn(List.of(returnFlight));
 
-        RoundTripResponse result = flightService.searchRoundTrip("DEL", "BOM", depDate, retDate);
+        var rt = flightService.searchRoundTrip("DEL", "BOM",
+                LocalDate.now().plusDays(1), LocalDate.now().plusDays(7));
 
-        assertThat(result.getOutboundFlights()).hasSize(1);
-        assertThat(result.getReturnFlights()).hasSize(1);
+        assertThat(rt.getOutboundFlights()).hasSize(1);
+        assertThat(rt.getReturnFlights()).hasSize(1);
+        assertThat(rt.getOutboundFlights().get(0).getFlightNumber()).isEqualTo("SK101");
+        assertThat(rt.getReturnFlights().get(0).getFlightNumber()).isEqualTo("SK201");
     }
 
-    @Test
-    @DisplayName("Should update flight successfully")
-    void updateFlight_success() {
-        Flight updated = Flight.builder()
-                .flightNumber("SK101-UPDATED")
-                .airlineId(airlineId)
-                .originAirportCode("DEL")
-                .destinationAirportCode("BLR")
-                .departureTime(LocalDateTime.of(2026, 6, 1, 10, 0))
-                .arrivalTime(LocalDateTime.of(2026, 6, 1, 13, 0))
-                .totalSeats(200)
-                .availableSeats(200)
-                .basePrice(6000.0)
-                .build();
-
-        when(flightRepository.findById(flightId)).thenReturn(Optional.of(testFlight));
-        when(flightRepository.save(any(Flight.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        Flight result = flightService.updateFlight(flightId, updated);
-
-        assertThat(result.getFlightNumber()).isEqualTo("SK101-UPDATED");
-        assertThat(result.getDestinationAirportCode()).isEqualTo("BLR");
-        assertThat(result.getDurationMinutes()).isEqualTo(180);
-    }
+    // ===== UPDATE STATUS TESTS =====
 
     @Test
-    @DisplayName("Should update flight status and publish Kafka event")
-    void updateStatus_success() {
+    @DisplayName("UpdateStatus: should change status and publish Kafka event")
+    void updateStatus_shouldChangeStatusAndPublishEvent() {
         when(flightRepository.findById(flightId)).thenReturn(Optional.of(testFlight));
-        when(flightRepository.save(any(Flight.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(flightRepository.save(any(Flight.class))).thenReturn(testFlight);
 
         Flight result = flightService.updateStatus(flightId, "DELAYED");
 
@@ -213,20 +224,60 @@ class FlightServiceImplTest {
     }
 
     @Test
-    @DisplayName("Should update status even when Kafka publish fails")
-    void updateStatus_kafkaFails() {
+    @DisplayName("UpdateStatus: should not throw when Kafka is unavailable")
+    void updateStatus_shouldNotThrow_whenKafkaFails() {
         when(flightRepository.findById(flightId)).thenReturn(Optional.of(testFlight));
-        when(flightRepository.save(any(Flight.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(kafkaTemplate.send(anyString(), anyString(), any())).thenThrow(new RuntimeException("Kafka down"));
+        when(flightRepository.save(any(Flight.class))).thenReturn(testFlight);
+        when(kafkaTemplate.send(anyString(), anyString(), any()))
+                .thenThrow(new RuntimeException("Kafka unavailable"));
 
-        Flight result = flightService.updateStatus(flightId, "CANCELLED");
-
-        assertThat(result.getStatus()).isEqualTo(FlightStatus.CANCELLED);
+        // Should NOT throw — Kafka is best-effort
+        assertThatCode(() -> flightService.updateStatus(flightId, "CANCELLED"))
+                .doesNotThrowAnyException();
     }
 
     @Test
-    @DisplayName("Should delete flight")
-    void deleteFlight_success() {
+    @DisplayName("UpdateStatus: should throw for invalid status value")
+    void updateStatus_shouldThrow_forInvalidStatus() {
+        when(flightRepository.findById(flightId)).thenReturn(Optional.of(testFlight));
+
+        assertThatThrownBy(() -> flightService.updateStatus(flightId, "INVALID_STATUS"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ===== UPDATE FLIGHT =====
+
+    @Test
+    @DisplayName("UpdateFlight: should update all fields and save")
+    void updateFlight_shouldUpdateAllFields() {
+        Flight updated = Flight.builder()
+                .flightNumber("SK999")
+                .airlineId(airlineId)
+                .originAirportCode("CCU")
+                .destinationAirportCode("HYD")
+                .durationMinutes(90)
+                .totalSeats(150)
+                .availableSeats(100)
+                .basePrice(3000.0)
+                .build();
+
+        when(flightRepository.findById(flightId)).thenReturn(Optional.of(testFlight));
+        when(flightRepository.save(any())).thenReturn(testFlight);
+
+        Flight result = flightService.updateFlight(flightId, updated);
+
+        verify(flightRepository).save(any());
+        assertThat(testFlight.getFlightNumber()).isEqualTo("SK999");
+        assertThat(testFlight.getOriginAirportCode()).isEqualTo("CCU");
+    }
+
+    // ===== DELETE FLIGHT =====
+
+    @Test
+    @DisplayName("DeleteFlight: should call deleteById on repository")
+    void deleteFlight_shouldDeleteById() {
+        doNothing().when(flightRepository).deleteById(flightId);
+
         flightService.deleteFlight(flightId);
 
         verify(flightRepository).deleteById(flightId);

@@ -2,12 +2,14 @@ package com.skybooker.auth.service.impl;
 
 import com.skybooker.auth.config.AppProperties;
 import com.skybooker.auth.dto.*;
+import com.skybooker.auth.entity.PasswordResetToken;
 import com.skybooker.auth.entity.User;
 import com.skybooker.auth.enums.AuthProvider;
 import com.skybooker.auth.enums.Role;
 import com.skybooker.auth.exception.BadRequestException;
 import com.skybooker.auth.exception.ResourceNotFoundException;
 import com.skybooker.auth.exception.UnauthorizedException;
+import com.skybooker.auth.repository.PasswordResetTokenRepository;
 import com.skybooker.auth.repository.UserRepository;
 import com.skybooker.auth.service.AuthService;
 import com.skybooker.auth.service.EmailService;
@@ -15,14 +17,12 @@ import com.skybooker.auth.service.JwtService;
 import com.skybooker.auth.service.TokenBlacklistService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Random;
@@ -34,17 +34,14 @@ import java.util.UUID;
 @Slf4j
 public class AuthServiceImpl implements AuthService {
 
-    private static final String OTP_PREFIX = "otp:";
-    private static final String RESET_PREFIX = "reset:";
-
     private final UserRepository userRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final EmailService emailService;
     private final TokenBlacklistService tokenBlacklistService;
     private final AppProperties appProperties;
-    private final StringRedisTemplate redisTemplate;
 
     @Override
     public AuthResponse register(RegisterRequest request) {
@@ -276,18 +273,24 @@ public class AuthServiceImpl implements AuthService {
 
         userRepository.findByEmail(request.getEmail().toLowerCase()).ifPresent(user -> {
             if (user.getProvider() == AuthProvider.LOCAL) {
-                // Generate 6-digit OTP and store in Redis with TTL
+                passwordResetTokenRepository.deleteByUser(user);
+
+                // Generate 6-digit OTP
                 String otp = String.format("%06d", new Random().nextInt(999999));
-                long expirationMinutes = appProperties.getPasswordReset().getExpirationMinutes();
 
-                redisTemplate.opsForValue().set(
-                        OTP_PREFIX + user.getEmail().toLowerCase(), otp,
-                        Duration.ofMinutes(expirationMinutes)
-                );
+                PasswordResetToken resetToken = PasswordResetToken.builder()
+                        .token(otp)
+                        .user(user)
+                        .expiresAt(LocalDateTime.now().plusMinutes(
+                                appProperties.getPasswordReset().getExpirationMinutes()))
+                        .used(false)
+                        .build();
 
-                log.info("OTP stored in Redis for email={}", user.getEmail());
+                passwordResetTokenRepository.save(resetToken);
+
+                log.info("OTP generated for email={}", user.getEmail());
                 emailService.sendPasswordResetOtp(user.getEmail(), user.getFullName(), otp,
-                        expirationMinutes);
+                        appProperties.getPasswordReset().getExpirationMinutes());
             }
         });
 
@@ -298,28 +301,23 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse verifyOtp(String email, String otp) {
         log.info("Verify OTP request for email={}", email);
 
-        String redisKey = OTP_PREFIX + email.toLowerCase();
-        String storedOtp = redisTemplate.opsForValue().get(redisKey);
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByTokenAndUsedFalse(otp)
+                .orElseThrow(() -> new BadRequestException("Invalid or expired OTP"));
 
-        if (storedOtp == null) {
-            throw new BadRequestException("Invalid or expired OTP");
+        if (resetToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new BadRequestException("OTP has expired");
         }
 
-        if (!storedOtp.equals(otp)) {
+        if (!resetToken.getUser().getEmail().equalsIgnoreCase(email)) {
             throw new BadRequestException("Invalid OTP for this email");
         }
 
-        // OTP is valid — delete it and generate a one-time reset token
-        redisTemplate.delete(redisKey);
-
+        // Generate a one-time reset token for the password reset step
         String resetUuid = UUID.randomUUID().toString();
-        long expirationMinutes = appProperties.getPasswordReset().getExpirationMinutes();
-        redisTemplate.opsForValue().set(
-                RESET_PREFIX + resetUuid, email.toLowerCase(),
-                Duration.ofMinutes(expirationMinutes)
-        );
+        resetToken.setToken(resetUuid);
+        passwordResetTokenRepository.save(resetToken);
 
-        log.info("OTP verified for email={}, reset token stored in Redis", email);
+        log.info("OTP verified for email={}, issuing reset token", email);
         return AuthResponse.builder()
                 .message("OTP verified successfully")
                 .accessToken(resetUuid)  // Reuse accessToken field to carry the reset token
@@ -330,15 +328,15 @@ public class AuthServiceImpl implements AuthService {
     public MessageResponse resetPassword(ResetPasswordRequest request) {
         log.info("Reset password request received");
 
-        String redisKey = RESET_PREFIX + request.getToken();
-        String email = redisTemplate.opsForValue().get(redisKey);
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByTokenAndUsedFalse(request.getToken())
+                .orElseThrow(() -> new BadRequestException("Invalid or used password reset token"));
 
-        if (email == null) {
-            throw new BadRequestException("Invalid or used password reset token");
+        if (resetToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            log.warn("Expired password reset token used");
+            throw new BadRequestException("Password reset token expired");
         }
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        User user = resetToken.getUser();
 
         if (user.getProvider() != AuthProvider.LOCAL) {
             throw new BadRequestException("Password reset is not supported for OAuth users");
@@ -347,8 +345,8 @@ public class AuthServiceImpl implements AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword())); // BCrypt encryption
         userRepository.save(user);
 
-        // Delete the reset token from Redis (one-time use)
-        redisTemplate.delete(redisKey);
+        resetToken.setUsed(true);
+        passwordResetTokenRepository.save(resetToken);
 
         log.info("Password reset successful for email={}", user.getEmail());
         return new MessageResponse("Password reset successful");

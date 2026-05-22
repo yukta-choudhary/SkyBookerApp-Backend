@@ -9,8 +9,6 @@ import com.skybooker.seat.enums.SeatStatus;
 import com.skybooker.seat.repository.SeatRepository;
 import com.skybooker.seat.service.SeatService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -23,13 +21,9 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
-@Slf4j
 public class SeatServiceImpl implements SeatService {
 
-    private static final String HOLD_PREFIX = "seat-hold:";
-
     private final SeatRepository seatRepository;
-    private final StringRedisTemplate redisTemplate;
 
     @Override
     public List<Seat> addSeatsForFlight(AddSeatsForFlightRequest request) {
@@ -71,14 +65,7 @@ public class SeatServiceImpl implements SeatService {
         seat.setHoldExpiresAt(LocalDateTime.now().plusMinutes(15));
 
         try {
-            Seat saved = seatRepository.save(seat);
-            // Track hold in Redis with 15-min TTL
-            redisTemplate.opsForValue().set(
-                    HOLD_PREFIX + seatId.toString(), "held",
-                    java.time.Duration.ofMinutes(15)
-            );
-            log.info("Seat {} held with Redis TTL=900s", seatId);
-            return saved;
+            return seatRepository.save(seat);
         } catch (ObjectOptimisticLockingFailureException ex) {
             throw new RuntimeException("Seat was modified by another request. Please try again.");
         }
@@ -94,8 +81,6 @@ public class SeatServiceImpl implements SeatService {
 
         seat.setStatus(SeatStatus.AVAILABLE);
         seat.setHoldExpiresAt(null);
-        redisTemplate.delete(HOLD_PREFIX + seatId.toString());
-        log.info("Seat {} released, Redis key removed", seatId);
         return seatRepository.save(seat);
     }
 
@@ -116,8 +101,6 @@ public class SeatServiceImpl implements SeatService {
 
         seat.setStatus(SeatStatus.CONFIRMED);
         seat.setHoldExpiresAt(null);
-        redisTemplate.delete(HOLD_PREFIX + seatId.toString());
-        log.info("Seat {} confirmed, Redis key removed", seatId);
         return seatRepository.save(seat);
     }
 
